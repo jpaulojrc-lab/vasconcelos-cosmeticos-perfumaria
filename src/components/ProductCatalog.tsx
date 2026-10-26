@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { SlidersHorizontal, Sparkles } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
 
@@ -38,38 +39,46 @@ export const ProductCatalog: React.FC = () => {
   ];
 
   return (
-    <section id="catalogo-produtos" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <section id="catalogo-produtos" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       
       {/* Category Tabs & Filter Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-neutral-200 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-neutral-200/80 gap-4">
         
-        {/* Pills */}
+        {/* Pills with subtle luxury borders */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => setSelectedCategory(c.id)}
-              className={`px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition ${
-                selectedCategory === c.id
-                  ? 'bg-neutral-900 text-white shadow-sm'
-                  : 'bg-white text-neutral-600 hover:bg-pink-50 hover:text-pink-600 border border-neutral-200'
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
+          {categories.map((c) => {
+            const isActive = selectedCategory === c.id;
+            return (
+              <button
+                key={c.id}
+                onClick={() => setSelectedCategory(c.id)}
+                className={`relative px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 cursor-pointer ${
+                  isActive
+                    ? 'bg-neutral-900 text-white shadow-md shadow-neutral-900/10'
+                    : 'bg-white text-neutral-600 hover:text-neutral-900 hover:border-amber-300 border border-neutral-200/80'
+                }`}
+              >
+                {isActive && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400" />
+                )}
+                {c.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Sort & Count */}
         <div className="flex items-center justify-between md:justify-end gap-3 text-xs text-neutral-500">
-          <span>{filteredProducts.length} produtos encontrados</span>
+          <span className="font-medium">
+            <strong className="text-neutral-800 font-bold">{filteredProducts.length}</strong> produtos selecionados
+          </span>
 
-          <div className="flex items-center gap-1.5 bg-white border border-neutral-200 rounded-full px-3 py-1.5">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-neutral-400" />
+          <div className="flex items-center gap-2 bg-white border border-neutral-200/90 rounded-full px-3.5 py-1.5 shadow-xs">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-transparent text-neutral-700 font-semibold focus:outline-hidden cursor-pointer"
+              className="bg-transparent text-neutral-800 text-xs font-semibold focus:outline-hidden cursor-pointer"
             >
               <option value="relevance">Mais Populares</option>
               <option value="price-asc">Menor Preço</option>
@@ -82,25 +91,29 @@ export const ProductCatalog: React.FC = () => {
 
       {/* Active Search Badge */}
       {searchQuery && (
-        <div className="mt-4 flex items-center justify-between bg-pink-50 border border-pink-200 px-4 py-2.5 rounded-xl text-xs">
-          <span className="text-pink-800">
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 flex items-center justify-between bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-2xl text-xs"
+        >
+          <span className="text-rose-900">
             Resultados da busca por: <strong>"{searchQuery}"</strong>
           </span>
           <button
             onClick={() => setSearchQuery('')}
-            className="text-pink-600 font-bold hover:underline"
+            className="text-rose-600 font-bold hover:underline cursor-pointer"
           >
             Limpar busca
           </button>
-        </div>
+        </motion.div>
       )}
 
       {/* Grid of Products */}
       {filteredProducts.length === 0 ? (
         <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-neutral-300 mt-6 p-8">
-          <Sparkles className="w-10 h-10 text-pink-400 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-neutral-900">Nenhum produto encontrado</h3>
-          <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
+          <Sparkles className="w-10 h-10 text-rose-400 mx-auto mb-3" />
+          <h3 className="text-base font-bold text-neutral-900 font-display">Nenhum produto encontrado</h3>
+          <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto font-light">
             Tente buscar por termos mais genéricos como "perfume", "creme" ou "splash".
           </p>
           <button
@@ -108,7 +121,7 @@ export const ProductCatalog: React.FC = () => {
               setSelectedCategory('todos');
               setSearchQuery('');
             }}
-            className="mt-4 px-6 py-2 rounded-full bg-pink-600 text-white text-xs font-bold"
+            className="mt-5 px-6 py-2.5 rounded-full bg-neutral-900 hover:bg-rose-600 text-white text-xs font-bold transition duration-300 cursor-pointer"
           >
             Ver catálogo completo
           </button>
