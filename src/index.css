@@ -3,6 +3,10 @@
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    color: #1a1817;
+    background-color: #FAF8F5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   
   h1, h2, h3, .font-display {
@@ -10,27 +14,128 @@
   }
 
   .font-serif-luxury {
-    font-family: 'Playfair Display', serif;
+    font-family: 'Playfair Display', Georgia, serif;
   }
 }
 
-/* Custom scrollbar */
+/* Luxury Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f7f4ee;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d4a5b8;
+  background: #d8c2ad;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #e91e63;
+  background: #c5a059;
 }
 
-/* Marquee animation */
+/* Luxury Metallic & Satin Gradients */
+.bg-gold-gradient {
+  background: linear-gradient(135deg, #DFBA73 0%, #C5A059 50%, #9E7D3B 100%);
+}
+
+.text-gold-gradient {
+  background: linear-gradient(135deg, #F3E5AB 0%, #DFBA73 35%, #C5A059 70%, #F5DEB3 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-rose-gold-gradient {
+  background: linear-gradient(135deg, #FAD0C4 0%, #FFD1FF 30%, #E05375 70%, #F8B195 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bg-velvet-dark {
+  background: linear-gradient(145deg, #181514 0%, #0d0c0b 100%);
+}
+
+/* Glassmorphism Luxury */
+.glass-luxury {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.glass-luxury-dark {
+  background: rgba(20, 18, 17, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(223, 186, 115, 0.15);
+}
+
+/* Shimmer Light Reflection (Luxury Bottle Sheen) */
+@keyframes shimmer-luxury {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-gold {
+  background: linear-gradient(
+    90deg,
+    rgba(223, 186, 115, 0) 0%,
+    rgba(243, 229, 171, 0.4) 50%,
+    rgba(223, 186, 115, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-luxury 3s infinite;
+}
+
+.shimmer-badge {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-badge::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
+  transform: skewX(-25deg);
+  animation: sheen-swipe 4.5s infinite;
+}
+
+@keyframes sheen-swipe {
+  0%, 65% {
+    left: -100%;
+  }
+  100% {
+    left: 200%;
+  }
+}
+
+/* Ambient Fragrance Glow */
+.glow-gold-subtle {
+  box-shadow: 0 0 25px -5px rgba(197, 160, 89, 0.3);
+}
+
+.glow-rose-subtle {
+  box-shadow: 0 0 25px -5px rgba(224, 83, 117, 0.3);
+}
+
+.border-gold-subtle {
+  border-color: rgba(197, 160, 89, 0.25);
+}
+
+/* Infinite Marquee */
 @keyframes marquee {
   0% { transform: translateX(0%); }
   100% { transform: translateX(-50%); }
@@ -39,9 +144,19 @@
 .animate-marquee {
   display: inline-flex;
   white-space: nowrap;
-  animation: marquee 25s linear infinite;
+  animation: marquee 28s linear infinite;
 }
 
 .animate-marquee:hover {
   animation-play-state: paused;
+}
+
+/* Respect user's motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
