@@ -1,0 +1,6 @@
+{
+  "name": "vasconcelos Presente | Cosméticos & Perfumaria",
+  "description": "Loja oficial vasconcelos Presente: Alta perfumaria, body splashes marcantes, skincare premium e maquiagem com super promoções e frete rápido.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
