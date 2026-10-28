@@ -122,17 +122,54 @@
   }
 }
 
-/* Ambient Fragrance Glow */
+/* Ambient Fragrance Glow & Velvet Shadows */
 .glow-gold-subtle {
   box-shadow: 0 0 25px -5px rgba(197, 160, 89, 0.3);
+}
+
+.glow-amber-subtle {
+  box-shadow: 0 0 35px -5px rgba(223, 186, 115, 0.35);
 }
 
 .glow-rose-subtle {
   box-shadow: 0 0 25px -5px rgba(224, 83, 117, 0.3);
 }
 
+.shadow-velvet {
+  box-shadow: 0 15px 35px -10px rgba(18, 15, 14, 0.12), 0 5px 15px -5px rgba(18, 15, 14, 0.06);
+}
+
+.shadow-velvet-lg {
+  box-shadow: 0 25px 50px -12px rgba(15, 13, 12, 0.35), 0 0 0 1px rgba(223, 186, 115, 0.1);
+}
+
 .border-gold-subtle {
   border-color: rgba(197, 160, 89, 0.25);
+}
+
+.border-gold-luxury {
+  border-color: rgba(223, 186, 115, 0.45);
+}
+
+.font-serif-italic {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+}
+
+/* Ambient Floating Glow Animation */
+@keyframes ambient-glow-pulse {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(1) translate(0px, 0px);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.08) translate(10px, -15px);
+  }
+}
+
+.animate-ambient-glow {
+  animation: ambient-glow-pulse 9s ease-in-out infinite;
 }
 
 /* Infinite Marquee */
