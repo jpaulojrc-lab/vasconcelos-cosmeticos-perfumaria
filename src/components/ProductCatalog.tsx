@@ -54,12 +54,12 @@ export const ProductCatalog: React.FC = () => {
                 onClick={() => setSelectedCategory(c.id)}
                 className={`relative px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 cursor-pointer ${
                   isActive
-                    ? 'bg-neutral-900 text-white shadow-md shadow-neutral-900/10'
-                    : 'bg-white text-neutral-600 hover:text-neutral-900 hover:border-amber-300 border border-neutral-200/80'
+                    ? 'bg-neutral-900 text-white shadow-md shadow-neutral-900/15 border border-amber-400/30'
+                    : 'bg-white text-neutral-600 hover:text-neutral-900 hover:border-amber-300/80 border border-neutral-200/80 hover:bg-[#FBF9F5]'
                 }`}
               >
                 {isActive && (
-                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-neutral-900" />
                 )}
                 {c.label}
               </button>

@@ -34,11 +34,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     <motion.div
       initial={{ opacity: 0, y: 15 }}
       whileInView={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -5 }}
       viewport={{ once: true, margin: '-40px' }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: 0.35, ease: 'easeOut' }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      className="group bg-white rounded-3xl border border-neutral-200/80 hover:border-amber-300/60 p-3 sm:p-4 transition-all duration-300 hover:shadow-xl hover:shadow-amber-500/5 flex flex-col justify-between relative"
+      className="group bg-white rounded-3xl border border-neutral-200/80 hover:border-amber-300/70 p-3 sm:p-4 transition-all duration-300 hover:shadow-2xl hover:shadow-amber-500/10 flex flex-col justify-between relative shadow-xs"
     >
       {/* Top Image Showcase */}
       <div
