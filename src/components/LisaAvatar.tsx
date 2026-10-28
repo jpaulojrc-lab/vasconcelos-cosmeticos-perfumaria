@@ -52,7 +52,6 @@ export const LisaAvatar: React.FC<LisaAvatarProps> = ({
 
   return (
     <motion.div
-      initial={false}
       animate={animate}
       transition={transition}
       whileHover={motionOn && tiltOnHover ? { rotate: -8, scale: 1.06 } : undefined}
