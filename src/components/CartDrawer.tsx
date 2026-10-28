@@ -179,9 +179,9 @@ export const CartDrawer: React.FC = () => {
                   </span>
                   <span className="text-[11px] text-neutral-500 font-mono">{Math.round(shippingProgress)}%</span>
                 </div>
-                <div className="w-full bg-neutral-200 rounded-full h-1.5 overflow-hidden">
+                <div className="w-full bg-neutral-200/90 rounded-full h-1.5 overflow-hidden">
                   <div
-                    className="bg-neutral-800 h-1.5 rounded-full transition-all duration-500"
+                    className="bg-gold-gradient h-1.5 rounded-full transition-all duration-500 shadow-xs"
                     style={{ width: `${shippingProgress}%` }}
                   />
                 </div>
@@ -362,6 +362,16 @@ export const CartDrawer: React.FC = () => {
                   <span>FINALIZAR COMPRA</span>
                   <ArrowRight className="w-4 h-4" />
                 </motion.button>
+
+                {/* Trust and Security micro badge */}
+                <div className="pt-1 flex items-center justify-center gap-4 text-[10px] text-neutral-400">
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    100% Original
+                  </span>
+                  <span>•</span>
+                  <span>Criptografia SSL 256-Bit</span>
+                </div>
               </div>
             )}
           </motion.div>
