@@ -41,10 +41,10 @@ export const HeroBanner: React.FC = () => {
 
   return (
     <div className="relative overflow-hidden bg-velvet-dark text-white border-b border-white/5">
-      {/* Decorative Luxury Glow Orbs */}
-      <div className="absolute -top-32 -left-24 w-[32rem] h-[32rem] bg-gradient-to-br from-amber-500/15 via-rose-600/20 to-transparent rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute -bottom-24 -right-24 w-[30rem] h-[30rem] bg-gradient-to-tl from-pink-600/20 via-amber-400/10 to-transparent rounded-full blur-[110px] pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(ellipse_at_top,_rgba(197,160,89,0.06),_transparent_70%)] pointer-events-none" />
+      {/* Decorative Luxury Ambient Glow Orbs */}
+      <div className="absolute -top-32 -left-24 w-[34rem] h-[34rem] bg-gradient-to-br from-amber-500/20 via-rose-600/20 to-transparent rounded-full blur-[110px] pointer-events-none animate-ambient-glow" />
+      <div className="absolute -bottom-24 -right-24 w-[32rem] h-[32rem] bg-gradient-to-tl from-pink-600/20 via-amber-400/15 to-transparent rounded-full blur-[120px] pointer-events-none animate-ambient-glow [animation-delay:4s]" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(ellipse_at_top,_rgba(223,186,115,0.08),_transparent_70%)] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 md:py-24 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
@@ -57,7 +57,7 @@ export const HeroBanner: React.FC = () => {
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full glass-luxury-dark border border-amber-400/30 text-amber-200 text-xs font-semibold tracking-widest uppercase shadow-sm shimmer-badge"
+              className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full glass-luxury-dark border border-amber-400/35 text-amber-200 text-xs font-semibold tracking-widest uppercase shadow-md shimmer-badge"
             >
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
               <span className="flex items-center gap-1.5">
@@ -71,10 +71,10 @@ export const HeroBanner: React.FC = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1] text-white font-display"
+              className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.08] text-white font-display"
             >
               A ESSÊNCIA DO <br />
-              <span className="italic font-serif-luxury font-normal text-rose-gold-gradient drop-shadow-sm">
+              <span className="italic font-serif-luxury font-normal text-rose-gold-gradient drop-shadow-md">
                 Poder & Sedução.
               </span>
             </motion.h1>
