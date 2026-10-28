@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../context/StoreContext';
+import { LisaAvatar } from './LisaAvatar';
 
 interface ChatMessage {
   id: string;
@@ -33,7 +34,7 @@ export const LiveChatWidget: React.FC = () => {
     {
       id: 'msg-welcome',
       sender: 'bot',
-      text: 'Olá! Sou a Sofia, consultora de alta perfumaria e beleza da vasconcelos Presente. ✨ Como posso tornar seu dia mais especial?',
+      text: 'Au, olá! 🐾 Sou a Lisa, a cachorrinha consultora de alta perfumaria e beleza da vasconcelos Presente. ✨ Como posso tornar seu dia mais especial?',
       timestamp: 'Agora',
       quickActions: [
         { label: '✨ Qual perfume fixa mais?', actionText: 'Qual perfume fixa mais?' },
@@ -72,7 +73,7 @@ export const LiveChatWidget: React.FC = () => {
       else if (isEvening) saudacao = 'Boa noite!';
 
       return {
-        text: `${saudacao} É um prazer ter você aqui na vasconcelos Presente! Como posso te encantar hoje? Posso te indicar uma fragrância marcante com mais de 14h de fixação, liberar cupons exclusivos ou te ajudar a acompanhar um pedido.`,
+        text: `${saudacao} É um prazer ter você aqui na vasconcelos Presente! Como posso te encantar hoje? Posso te indicar uma fragrância marcante com mais de 14h de fixação, liberar cupons exclusivos ou te ajudar a acompanhar um pedido. 🐾`,
         quickActions: [
           { label: '🌹 Ver Mais Vendidos', actionText: 'Quais os perfumes mais vendidos?' },
           { label: '🎟️ Cupons de Hoje', actionText: 'Quais cupons estão ativos?' },
@@ -84,7 +85,7 @@ export const LiveChatWidget: React.FC = () => {
     // 2. Agradecimentos & Elogios
     if (text.includes('obrigad') || text.includes('valeu') || text.includes('agradeço') || text.includes('muito bom') || text.includes('maravilha') || text.includes('perfeito')) {
       return {
-        text: 'Por nada! Conte sempre comigo e com a vasconcelos Presente para realçar sua essência e marcar presença por onde passar. Se precisar de mais alguma dica, estou por aqui! ✨',
+        text: 'Por nada! Conte sempre comigo e com a vasconcelos Presente para realçar sua essência e marcar presença por onde passar. Se precisar de mais alguma dica, estou por aqui! ✨🐾',
         quickActions: [
           { label: '🛍️ Explorar a Loja', actionText: 'Ver todos os produtos' }
         ]
@@ -267,15 +268,15 @@ export const LiveChatWidget: React.FC = () => {
           whileTap={{ scale: 0.95 }}
           onClick={() => setIsChatOpen(true)}
           className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 bg-gradient-to-r from-neutral-900 via-stone-900 to-black hover:from-rose-600 hover:to-rose-700 text-white p-3.5 sm:px-5 sm:py-3.5 rounded-full shadow-2xl shadow-neutral-900/40 flex items-center gap-3 transition-colors duration-300 group border border-amber-400/40 cursor-pointer"
-          aria-label="Abrir Consultora Virtual"
+          aria-label="Abrir Lisa, consultora virtual"
         >
           <div className="relative">
-            <MessageCircle className="w-6 h-6 text-amber-300" />
+            <LisaAvatar size={40} breathe tiltOnHover />
             <span className="w-3 h-3 bg-emerald-400 border-2 border-neutral-900 rounded-full absolute -top-1 -right-1 animate-pulse" />
           </div>
           <div className="hidden sm:block text-left">
             <span className="block text-[10px] font-black uppercase tracking-wider text-amber-300">
-              Sofia • Consultora 24h
+              Lisa • Consultora 24h
             </span>
             <span className="block text-xs font-bold text-white">
               Tirar Dúvidas & Dicas
@@ -298,14 +299,12 @@ export const LiveChatWidget: React.FC = () => {
             <div className="p-4 bg-gradient-to-r from-neutral-900 via-stone-900 to-black text-white flex items-center justify-between border-b border-amber-500/20">
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center font-bold text-sm text-white shadow-md">
-                    S
-                  </div>
+                  <LisaAvatar size={40} breathe />
                   <span className="w-3 h-3 bg-emerald-400 border-2 border-neutral-900 rounded-full absolute bottom-0 right-0" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold flex items-center gap-1.5 text-white">
-                    Sofia • Consultora vasconcelos
+                    Lisa • Consultora vasconcelos
                     <ShieldCheck className="w-4 h-4 text-amber-400" />
                   </h3>
                   <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
@@ -362,9 +361,7 @@ export const LiveChatWidget: React.FC = () => {
                   className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   {msg.sender === 'bot' && (
-                    <div className="w-7 h-7 rounded-full bg-neutral-900 text-amber-300 border border-amber-400/40 flex items-center justify-center shrink-0 font-bold text-[10px]">
-                      S
-                    </div>
+                    <LisaAvatar size={28} hopOnMount />
                   )}
 
                   <div className="max-w-[85%] space-y-2">
@@ -403,10 +400,11 @@ export const LiveChatWidget: React.FC = () => {
 
               {isTyping && (
                 <div className="flex items-center gap-2 text-neutral-500 text-xs italic">
+                  <LisaAvatar size={28} mood="listening" />
                   <div className="w-2 h-2 rounded-full bg-amber-500 animate-bounce" />
                   <div className="w-2 h-2 rounded-full bg-amber-500 animate-bounce delay-100" />
                   <div className="w-2 h-2 rounded-full bg-amber-500 animate-bounce delay-200" />
-                  <span>Sofia está digitando...</span>
+                  <span>Lisa está digitando...</span>
                 </div>
               )}
 
