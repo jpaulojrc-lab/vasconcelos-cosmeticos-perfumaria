@@ -19,6 +19,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../context/StoreContext';
 import { LisaAvatar } from './LisaAvatar';
+import { FloatingHearts, PawBubble } from './LisaDecor';
 
 interface ChatMessage {
   id: string;
@@ -282,6 +283,7 @@ export const LiveChatWidget: React.FC = () => {
               Tirar Dúvidas & Dicas
             </span>
           </div>
+          <PawBubble />
         </motion.button>
       )}
 
@@ -296,7 +298,8 @@ export const LiveChatWidget: React.FC = () => {
             className="fixed bottom-4 sm:bottom-6 right-3 sm:right-6 z-50 w-[94vw] sm:w-[400px] h-[550px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-neutral-200/80 flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="p-4 bg-gradient-to-r from-neutral-900 via-stone-900 to-black text-white flex items-center justify-between border-b border-amber-500/20">
+            <div className="relative p-4 bg-gradient-to-r from-neutral-900 via-stone-900 to-black text-white flex items-center justify-between border-b border-amber-500/20">
+              <FloatingHearts />
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <LisaAvatar size={40} breathe />

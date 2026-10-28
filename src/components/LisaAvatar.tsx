@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 
 export type LisaMood = 'idle' | 'listening';
@@ -30,21 +30,25 @@ export const LisaAvatar: React.FC<LisaAvatarProps> = ({
   const [imageFailed, setImageFailed] = useState(false);
   const motionOn = !reduceMotion;
 
-  const animate: Record<string, number | number[]> = {};
-  const transition: Record<string, object> = {};
+  // Memoizado para que re-renders do chat não reiniciem o pulinho dos avatares antigos.
+  const { animate, transition } = useMemo(() => {
+    const animate: Record<string, number | number[]> = {};
+    const transition: Record<string, object> = {};
 
-  if (motionOn && breathe) {
-    animate.scale = [1, 1.04, 1];
-    transition.scale = { duration: 3, repeat: Infinity, ease: 'easeInOut' };
-  }
-  if (motionOn && mood === 'listening') {
-    animate.rotate = [-6, 6, -6];
-    transition.rotate = { duration: 1.2, repeat: Infinity, ease: 'easeInOut' };
-  }
-  if (motionOn && hopOnMount) {
-    animate.y = [0, -8, 0];
-    transition.y = { duration: 0.5, ease: 'easeOut' };
-  }
+    if (motionOn && breathe) {
+      animate.scale = [1, 1.04, 1];
+      transition.scale = { duration: 3, repeat: Infinity, ease: 'easeInOut' };
+    }
+    if (motionOn && mood === 'listening') {
+      animate.rotate = [-6, 6, -6];
+      transition.rotate = { duration: 1.2, repeat: Infinity, ease: 'easeInOut' };
+    }
+    if (motionOn && hopOnMount) {
+      animate.y = [0, -8, 0];
+      transition.y = { duration: 0.5, ease: 'easeOut' };
+    }
+    return { animate, transition };
+  }, [motionOn, breathe, mood, hopOnMount]);
 
   return (
     <motion.div
