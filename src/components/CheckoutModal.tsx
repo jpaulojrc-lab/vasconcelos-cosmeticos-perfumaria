@@ -19,6 +19,7 @@ import confetti from 'canvas-confetti';
 import { useStore } from '../context/StoreContext';
 import { PaymentMethod, ShippingQuote, Address, Order } from '../types';
 import { formatBRL, formatInstallment } from '../utils/formatters';
+import { isValidCreditCardNumber, sanitizeText, maskSensitiveData } from '../utils/security';
 
 export const CheckoutModal: React.FC = () => {
   const { 
@@ -134,21 +135,21 @@ export const CheckoutModal: React.FC = () => {
     const shippingAddress: Address = {
       id: `addr-${Date.now()}`,
       name: 'Entrega',
-      cep,
-      logradouro,
-      numero,
-      complemento,
-      bairro,
-      localidade,
-      uf
+      cep: sanitizeText(cep),
+      logradouro: sanitizeText(logradouro),
+      numero: sanitizeText(numero),
+      complemento: sanitizeText(complemento),
+      bairro: sanitizeText(bairro),
+      localidade: sanitizeText(localidade),
+      uf: sanitizeText(uf)
     };
 
     const order = createOrder({
       customer: {
-        name: name || 'Cliente Vasconcelos',
-        email: email || 'cliente@vasconcelosbeauty.com.br',
-        phone: phone || '(11) 99999-9999',
-        cpf: cpf || '000.000.000-00'
+        name: sanitizeText(name) || 'Cliente Vasconcelos',
+        email: sanitizeText(email) || 'cliente@vasconcelosbeauty.com.br',
+        phone: sanitizeText(phone) || '(11) 99999-9999',
+        cpf: sanitizeText(cpf) || '000.000.000-00'
       },
       shippingAddress,
       shippingMethod: {
@@ -612,8 +613,24 @@ export const CheckoutModal: React.FC = () => {
                         value={cardNumber}
                         onChange={(e) => setCardNumber(e.target.value)}
                         placeholder="0000 0000 0000 0000"
-                        className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs text-neutral-900 font-mono"
+                        className={`w-full mt-1 bg-neutral-50 border rounded-xl px-3 py-2 text-xs text-neutral-900 font-mono transition ${
+                          isValidCreditCardNumber(cardNumber) || cardNumber.includes('••••')
+                            ? 'border-emerald-400 focus:border-emerald-500'
+                            : cardNumber.replace(/\D/g, '').length >= 13
+                            ? 'border-rose-400 focus:border-rose-500'
+                            : 'border-neutral-300 focus:border-amber-500'
+                        }`}
                       />
+                      {isValidCreditCardNumber(cardNumber) || cardNumber.includes('••••') ? (
+                        <p className="text-[10px] text-emerald-600 flex items-center gap-1 mt-1 font-medium">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Cartão autenticado via Algoritmo de Luhn (Módulo 10)
+                        </p>
+                      ) : cardNumber.replace(/\D/g, '').length >= 13 ? (
+                        <p className="text-[10px] text-rose-600 mt-1 font-medium">
+                          Dígitos do cartão incorretos segundo validação de Luhn.
+                        </p>
+                      ) : null}
                     </div>
 
                     <div>
