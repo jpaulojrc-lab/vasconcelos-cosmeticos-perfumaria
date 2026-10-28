@@ -15,6 +15,29 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// Defensive HTTP Security Headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+  // Content-Security-Policy (CSP) tailored for Vite dev & prod, Google Fonts, and Unsplash images
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: https://images.unsplash.com https://*.unsplash.com",
+    "connect-src 'self' ws: wss: https:",
+    "frame-ancestors 'none'",
+  ].join('; ');
+
+  res.setHeader('Content-Security-Policy', cspDirectives);
+  next();
+});
+
 // Initialize GoogleGenAI
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
