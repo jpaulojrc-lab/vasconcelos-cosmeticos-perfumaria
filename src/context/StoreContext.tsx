@@ -102,6 +102,16 @@ interface StoreContextType {
   // Orders
   createOrder: (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => Order;
   updateOrderStatus: (orderId: string, status: Order['orderStatus'], trackingCode?: string) => void;
+  updateOrderPaymentConditions: (
+    orderId: string,
+    conditions: {
+      paymentMethod: Order['paymentMethod'];
+      installments: number;
+      paymentStatus: Order['paymentStatus'];
+      adminPaymentTerms?: string;
+      adminFirstDueDate?: string;
+    }
+  ) => void;
 
   // Reviews
   addReview: (review: Omit<Review, 'id' | 'date' | 'helpfulCount'>) => void;
@@ -1028,6 +1038,46 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
   };
 
+  const updateOrderPaymentConditions = (
+    orderId: string,
+    conditions: {
+      paymentMethod: Order['paymentMethod'];
+      installments: number;
+      paymentStatus: Order['paymentStatus'];
+      adminPaymentTerms?: string;
+      adminFirstDueDate?: string;
+    }
+  ) => {
+    setOrders(prev =>
+      prev.map(o => {
+        if (o.id === orderId) {
+          const updated: Order = {
+            ...o,
+            paymentMethod: conditions.paymentMethod,
+            installments: Math.max(1, conditions.installments),
+            paymentStatus: conditions.paymentStatus,
+            orderStatus: conditions.paymentStatus === 'paid' && o.orderStatus === 'pendente' ? 'pago' : o.orderStatus,
+            adminPaymentTerms: conditions.adminPaymentTerms,
+            adminFirstDueDate: conditions.adminFirstDueDate
+          };
+          supabasePatch(SUPABASE_TABLES.orders, `id=eq.${encodeURIComponent(orderId)}`, {
+            payment_method: updated.paymentMethod,
+            installments: updated.installments,
+            payment_status: updated.paymentStatus,
+            order_status: updated.orderStatus,
+            shipping_method: {
+              ...updated.shippingMethod,
+              adminPaymentTerms: updated.adminPaymentTerms,
+              adminFirstDueDate: updated.adminFirstDueDate
+            }
+          });
+          return updated;
+        }
+        return o;
+      })
+    );
+  };
+
   // Review Actions
   const addReview = (newRev: Omit<Review, 'id' | 'date' | 'helpfulCount'>) => {
     const review: Review = {
@@ -1239,6 +1289,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         notifyCustomersAboutCoupon,
         createOrder,
         updateOrderStatus,
+        updateOrderPaymentConditions,
         addReview,
         getProductReviews,
         requestPushPermission,

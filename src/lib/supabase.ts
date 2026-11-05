@@ -103,7 +103,7 @@ export function mapRowToProduct(row: any): Product {
 }
 
 export function mapOrderToRow(o: Order, settledInstallments?: number) {
-  const totalInst = o.paymentMethod === 'credit_card' ? Math.max(1, o.installments || 1) : 1;
+  const totalInst = Math.max(1, o.installments || 1);
   const defaultSettled =
     settledInstallments !== undefined
       ? settledInstallments
@@ -117,7 +117,11 @@ export function mapOrderToRow(o: Order, settledInstallments?: number) {
     created_at: o.createdAt,
     customer: o.customer,
     shipping_address: o.shippingAddress,
-    shipping_method: o.shippingMethod,
+    shipping_method: {
+      ...o.shippingMethod,
+      adminPaymentTerms: o.adminPaymentTerms || undefined,
+      adminFirstDueDate: o.adminFirstDueDate || undefined
+    },
     items: o.items || [],
     subtotal: Number(o.subtotal),
     discount: Number(o.discount),
@@ -142,15 +146,15 @@ export function mapRowToOrder(row: any): Order & { settledInstallments?: number 
     customer: row.customer || { name: 'Cliente', email: '', phone: '', cpf: '' },
     shippingAddress: row.shipping_address || {
       id: 'addr-1',
-      name: 'Entrega',
-      cep: '',
+      name: 'VasconcelosExpress',
+      cep: '00000-000',
       logradouro: '',
-      numero: '',
-      bairro: '',
-      localidade: 'São Paulo',
-      uf: 'SP'
+      numero: 'S/N',
+      bairro: 'VasconcelosExpress',
+      localidade: 'Entrega Expressa',
+      uf: 'BR'
     },
-    shippingMethod: row.shipping_method || { name: 'Correios', price: 0, days: 3 },
+    shippingMethod: row.shipping_method || { name: 'VasconcelosExpress', price: 0, days: 1 },
     items: Array.isArray(row.items) ? row.items : [],
     subtotal: Number(row.subtotal ?? 0),
     discount: Number(row.discount ?? 0),
@@ -164,7 +168,9 @@ export function mapRowToOrder(row: any): Order & { settledInstallments?: number 
     settledInstallments:
       typeof row.settled_installments === 'number' ? row.settled_installments : undefined,
     trackingCode: row.tracking_code || undefined,
-    pixCopiaECola: row.pix_copia_e_cola || undefined
+    pixCopiaECola: row.pix_copia_e_cola || undefined,
+    adminPaymentTerms: row.shipping_method?.adminPaymentTerms || undefined,
+    adminFirstDueDate: row.shipping_method?.adminFirstDueDate || undefined
   };
 }
 
@@ -354,3 +360,4 @@ export async function supabaseDelete(
     return false;
   }
 }
+

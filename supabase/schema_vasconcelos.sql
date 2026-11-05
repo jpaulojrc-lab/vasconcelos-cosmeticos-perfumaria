@@ -1,12 +1,3 @@
--- =============================================================================
--- VASCONCELOS COSMÉTICOS & ALTA PERFUMARIA — SCHEMA COMPLETO SUPABASE (POSTGRESQL)
--- Todas as tabelas possuem o sufixo "_vasconcelos", RLS (Row Level Security)
--- ativo, políticas de segurança explícitas, índices de performance e dados iniciais.
--- =============================================================================
-
-BEGIN;
-
--- 1. Função utilitária para atualizar automaticamente a coluna updated_at
 CREATE OR REPLACE FUNCTION public.set_updated_at_vasconcelos()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -19,9 +10,6 @@ BEGIN
 END;
 $$;
 
--- =============================================================================
--- TABELA 1: PRODUTOS (products_vasconcelos)
--- =============================================================================
 CREATE TABLE IF NOT EXISTS public.products_vasconcelos (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (char_length(trim(name)) > 0),
@@ -55,9 +43,6 @@ CREATE TRIGGER trg_products_vasconcelos_updated_at
 BEFORE UPDATE ON public.products_vasconcelos
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at_vasconcelos();
 
--- =============================================================================
--- TABELA 2: CLIENTES (customers_vasconcelos)
--- =============================================================================
 CREATE TABLE IF NOT EXISTS public.customers_vasconcelos (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (char_length(trim(name)) > 0),
@@ -80,9 +65,6 @@ CREATE TRIGGER trg_customers_vasconcelos_updated_at
 BEFORE UPDATE ON public.customers_vasconcelos
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at_vasconcelos();
 
--- =============================================================================
--- TABELA 3: PEDIDOS & PARCELAS (orders_vasconcelos)
--- =============================================================================
 CREATE TABLE IF NOT EXISTS public.orders_vasconcelos (
   id TEXT PRIMARY KEY,
   order_number TEXT NOT NULL UNIQUE CHECK (char_length(trim(order_number)) > 0),
@@ -117,9 +99,6 @@ CREATE TRIGGER trg_orders_vasconcelos_updated_at
 BEFORE UPDATE ON public.orders_vasconcelos
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at_vasconcelos();
 
--- =============================================================================
--- TABELA 4: CUPONS DE DESCONTO (coupons_vasconcelos)
--- =============================================================================
 CREATE TABLE IF NOT EXISTS public.coupons_vasconcelos (
   code TEXT PRIMARY KEY CHECK (char_length(trim(code)) > 0),
   discount_type TEXT NOT NULL CHECK (discount_type IN ('percentage', 'fixed')),
@@ -130,9 +109,6 @@ CREATE TABLE IF NOT EXISTS public.coupons_vasconcelos (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- =============================================================================
--- TABELA 5: AVALIAÇÕES DE PRODUTOS (reviews_vasconcelos)
--- =============================================================================
 CREATE TABLE IF NOT EXISTS public.reviews_vasconcelos (
   id TEXT PRIMARY KEY,
   product_id TEXT NOT NULL REFERENCES public.products_vasconcelos(id) ON DELETE CASCADE,
@@ -150,9 +126,6 @@ CREATE TABLE IF NOT EXISTS public.reviews_vasconcelos (
 
 CREATE INDEX IF NOT EXISTS idx_reviews_vasconcelos_product_id ON public.reviews_vasconcelos(product_id);
 
--- =============================================================================
--- TABELA 6: CONFIGURAÇÕES FINANCEIRAS & TAXAS (financial_settings_vasconcelos)
--- =============================================================================
 CREATE TABLE IF NOT EXISTS public.financial_settings_vasconcelos (
   id TEXT PRIMARY KEY DEFAULT 'default',
   anticipation_mode TEXT NOT NULL DEFAULT 'fluxo_mensal' CHECK (anticipation_mode IN ('fluxo_mensal', 'antecipado_d1')),
@@ -167,9 +140,6 @@ CREATE TRIGGER trg_financial_settings_vasconcelos_updated_at
 BEFORE UPDATE ON public.financial_settings_vasconcelos
 FOR EACH ROW EXECUTE FUNCTION public.set_updated_at_vasconcelos();
 
--- =============================================================================
--- TABELA 7: HISTÓRICO DE COBRANÇAS (billing_logs_vasconcelos)
--- =============================================================================
 CREATE TABLE IF NOT EXISTS public.billing_logs_vasconcelos (
   id TEXT PRIMARY KEY,
   timestamp_label TEXT NOT NULL,
@@ -184,9 +154,6 @@ CREATE TABLE IF NOT EXISTS public.billing_logs_vasconcelos (
 
 CREATE INDEX IF NOT EXISTS idx_billing_logs_vasconcelos_created_at ON public.billing_logs_vasconcelos(created_at DESC);
 
--- =============================================================================
--- TABELA 8: NOTIFICAÇÕES DA LOJA (notifications_vasconcelos)
--- =============================================================================
 CREATE TABLE IF NOT EXISTS public.notifications_vasconcelos (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -198,9 +165,6 @@ CREATE TABLE IF NOT EXISTS public.notifications_vasconcelos (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- =============================================================================
--- PERMISSÕES DA DATA API (GRANT PARA ROLES ANON E AUTHENTICATED)
--- =============================================================================
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.products_vasconcelos TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.customers_vasconcelos TO anon, authenticated;
@@ -211,9 +175,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.financial_settings_vasconcelos TO
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.billing_logs_vasconcelos TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.notifications_vasconcelos TO anon, authenticated;
 
--- =============================================================================
--- ATIVAÇÃO DE ROW LEVEL SECURITY (RLS) E POLÍTICAS DE SEGURANÇA
--- =============================================================================
 ALTER TABLE public.products_vasconcelos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers_vasconcelos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders_vasconcelos ENABLE ROW LEVEL SECURITY;
@@ -223,7 +184,6 @@ ALTER TABLE public.financial_settings_vasconcelos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.billing_logs_vasconcelos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications_vasconcelos ENABLE ROW LEVEL SECURITY;
 
--- Políticas para products_vasconcelos
 DROP POLICY IF EXISTS "products_select_policy_vasconcelos" ON public.products_vasconcelos;
 CREATE POLICY "products_select_policy_vasconcelos"
   ON public.products_vasconcelos FOR SELECT
@@ -237,7 +197,6 @@ CREATE POLICY "products_write_policy_vasconcelos"
   USING (true)
   WITH CHECK (price >= 0 AND stock >= 0 AND char_length(trim(name)) > 0);
 
--- Políticas para customers_vasconcelos
 DROP POLICY IF EXISTS "customers_select_policy_vasconcelos" ON public.customers_vasconcelos;
 CREATE POLICY "customers_select_policy_vasconcelos"
   ON public.customers_vasconcelos FOR SELECT
@@ -251,7 +210,6 @@ CREATE POLICY "customers_write_policy_vasconcelos"
   USING (true)
   WITH CHECK (position('@' in email) > 1 AND char_length(trim(name)) > 0);
 
--- Políticas para orders_vasconcelos
 DROP POLICY IF EXISTS "orders_select_policy_vasconcelos" ON public.orders_vasconcelos;
 CREATE POLICY "orders_select_policy_vasconcelos"
   ON public.orders_vasconcelos FOR SELECT
@@ -265,7 +223,6 @@ CREATE POLICY "orders_write_policy_vasconcelos"
   USING (true)
   WITH CHECK (total >= 0 AND installments >= 1 AND installments <= 12);
 
--- Políticas para coupons_vasconcelos
 DROP POLICY IF EXISTS "coupons_select_policy_vasconcelos" ON public.coupons_vasconcelos;
 CREATE POLICY "coupons_select_policy_vasconcelos"
   ON public.coupons_vasconcelos FOR SELECT
@@ -279,7 +236,6 @@ CREATE POLICY "coupons_write_policy_vasconcelos"
   USING (true)
   WITH CHECK (value > 0 AND char_length(trim(code)) > 0);
 
--- Políticas para reviews_vasconcelos
 DROP POLICY IF EXISTS "reviews_select_policy_vasconcelos" ON public.reviews_vasconcelos;
 CREATE POLICY "reviews_select_policy_vasconcelos"
   ON public.reviews_vasconcelos FOR SELECT
@@ -293,7 +249,6 @@ CREATE POLICY "reviews_write_policy_vasconcelos"
   USING (true)
   WITH CHECK (rating >= 1 AND rating <= 5 AND char_length(trim(comment)) > 0);
 
--- Políticas para financial_settings_vasconcelos
 DROP POLICY IF EXISTS "financial_settings_policy_vasconcelos" ON public.financial_settings_vasconcelos;
 CREATE POLICY "financial_settings_policy_vasconcelos"
   ON public.financial_settings_vasconcelos FOR ALL
@@ -301,7 +256,6 @@ CREATE POLICY "financial_settings_policy_vasconcelos"
   USING (true)
   WITH CHECK (anticipation_mode IN ('fluxo_mensal', 'antecipado_d1'));
 
--- Políticas para billing_logs_vasconcelos
 DROP POLICY IF EXISTS "billing_logs_policy_vasconcelos" ON public.billing_logs_vasconcelos;
 CREATE POLICY "billing_logs_policy_vasconcelos"
   ON public.billing_logs_vasconcelos FOR ALL
@@ -309,7 +263,6 @@ CREATE POLICY "billing_logs_policy_vasconcelos"
   USING (true)
   WITH CHECK (amount >= 0);
 
--- Políticas para notifications_vasconcelos
 DROP POLICY IF EXISTS "notifications_policy_vasconcelos" ON public.notifications_vasconcelos;
 CREATE POLICY "notifications_policy_vasconcelos"
   ON public.notifications_vasconcelos FOR ALL
@@ -317,9 +270,6 @@ CREATE POLICY "notifications_policy_vasconcelos"
   USING (true)
   WITH CHECK (char_length(trim(title)) > 0);
 
--- =============================================================================
--- CARGA INICIAL PADRÃO (SEED DATA)
--- =============================================================================
 INSERT INTO public.financial_settings_vasconcelos (id, anticipation_mode, settled_installments_map)
 VALUES (
   'default',
@@ -335,5 +285,3 @@ VALUES
   ('PERFUME30', 'fixed', 30, 250, 'R$ 30 OFF direto no carrinho para compras acima de R$ 250', true),
   ('FRETEVIP', 'fixed', 25, 120, 'Bônus de R$ 25 para abater no frete ou produtos', true)
 ON CONFLICT (code) DO NOTHING;
-
-COMMIT;

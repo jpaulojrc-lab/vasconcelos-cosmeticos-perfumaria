@@ -456,6 +456,60 @@ app.post('/api/coupons/notify-customers', async (req, res) => {
   }
 });
 
+// API Endpoint to notify Admin (sandravasconcellossillva@gmail.com) immediately when a customer finishes a new order
+app.post('/api/orders/notify-admin', async (req, res) => {
+  try {
+    const { order } = req.body || {};
+    const adminEmail = 'sandravasconcellossillva@gmail.com';
+    if (!order || !order.orderNumber) {
+      return res.status(400).json({ success: false, error: 'Pedido inválido.' });
+    }
+
+    const itemsText = Array.isArray(order.items)
+      ? order.items.map((it: any) => `${it.quantity}x ${it.name}`).join(', ')
+      : '';
+    const formattedTotal = `R$ ${Number(order.total || 0).toFixed(2).replace('.', ',')}`;
+
+    const subject = `🛍️ Novo Pedido ${order.orderNumber} — ${order.customer?.name || 'Cliente'} (${formattedTotal})`;
+    const htmlBody = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e5e5; border-radius: 12px; overflow: hidden;">
+        <div style="background: #111111; color: #ffffff; padding: 20px 24px;">
+          <h2 style="margin: 0; letter-spacing: 3px; font-weight: 600;">VASCONCELOS</h2>
+          <p style="margin: 4px 0 0; font-size: 11px; color: #d4d4d4; text-transform: uppercase;">Novo Pedido Recebido • VasconcelosExpress</p>
+        </div>
+        <div style="padding: 24px; color: #111111; background: #ffffff; font-size: 13px; line-height: 1.6;">
+          <p>Olá <strong>Sandra Vasconcelos</strong>, um novo pedido acabou de ser finalizado no site:</p>
+          <div style="background: #F7F6F2; border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px; margin: 16px 0;">
+            <p style="margin: 4px 0;"><strong>Número do Pedido:</strong> ${order.orderNumber}</p>
+            <p style="margin: 4px 0;"><strong>Cliente:</strong> ${order.customer?.name || ''}</p>
+            <p style="margin: 4px 0;"><strong>WhatsApp do Cliente:</strong> ${order.customer?.phone || ''}</p>
+            <p style="margin: 4px 0;"><strong>Modalidade de Entrega:</strong> VasconcelosExpress (GRÁTIS - Sem custos adicionais)</p>
+            <p style="margin: 4px 0;"><strong>Produtos:</strong> ${itemsText}</p>
+            <p style="margin: 6px 0 0; font-size: 15px;"><strong>Total:</strong> <span style="color: #8B1E3F;">${formattedTotal}</span></p>
+          </div>
+          <p style="font-size: 12px; color: #555;">
+            Acesse o <strong>Painel Administrativo VASCONCELOS</strong> para definir a condição de pagamento (À Vista ou Parcelado) e gerar o PDF oficial das condições para enviar ao cliente.
+          </p>
+        </div>
+      </div>
+    `;
+
+    const passToTry = billingAutomationConfig.smtpAppPassword || 'S23086072';
+    await sendGmailSmtpDirect({
+      fromEmail: adminEmail,
+      password: passToTry,
+      toEmail: adminEmail,
+      subject,
+      textBody: `Novo pedido ${order.orderNumber} de ${order.customer?.name} (${order.customer?.phone}) - Total ${formattedTotal}`,
+      htmlBody
+    });
+
+    return res.json({ success: true, message: `Notificação enviada para ${adminEmail}` });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Configuração da Régua de Automação de Cobrança (E-mail + WhatsApp API/Webhook)
 let billingAutomationConfig = {
   enabled: true,

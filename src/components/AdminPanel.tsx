@@ -40,6 +40,7 @@ import { Product, ProductCategory, Order, OrderStatus, Coupon } from '../types';
 import { formatBRL, formatDate } from '../utils/formatters';
 import { AdminLogin } from './AdminLogin';
 import { SUPABASE_TABLES, supabasePatch, supabaseUpsert } from '../lib/supabase';
+import { generateOrderConditionsPdf } from '../utils/pdfGenerator';
 
 export const AdminPanel: React.FC = () => {
   const {
@@ -51,6 +52,7 @@ export const AdminPanel: React.FC = () => {
     updateProduct,
     deleteProduct,
     updateOrderStatus,
+    updateOrderPaymentConditions,
     coupons,
     addCoupon,
     updateCoupon,
@@ -65,6 +67,26 @@ export const AdminPanel: React.FC = () => {
 
   const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
   const [supabaseSyncMsg, setSupabaseSyncMsg] = useState<string | null>(null);
+
+  // Modal de Condições de Pagamento do ADM & Geração de PDF
+  const [conditionModalOrder, setConditionModalOrder] = useState<Order | null>(null);
+  const [condMethod, setCondMethod] = useState<Order['paymentMethod']>('pix');
+  const [condInstallments, setCondInstallments] = useState<number>(1);
+  const [condStatus, setCondStatus] = useState<Order['paymentStatus']>('pending');
+  const [condDueDate, setCondDueDate] = useState<string>('Imediato');
+  const [condNotes, setCondNotes] = useState<string>('');
+
+  const handleOpenConditionModal = (order: Order) => {
+    setConditionModalOrder(order);
+    setCondMethod(order.paymentMethod || 'pix');
+    setCondInstallments(Math.max(1, order.installments || 1));
+    setCondStatus(order.paymentStatus || 'pending');
+    setCondDueDate(order.adminFirstDueDate || 'Imediato / A Combinar');
+    setCondNotes(
+      order.adminPaymentTerms ||
+        'Entrega exclusiva via VasconcelosExpress sem custos adicionais (Frete Grátis).'
+    );
+  };
 
   const [activeTab, setActiveTab] = useState<'relatorios' | 'estoque' | 'cupons' | 'cobranca'>('relatorios');
 
@@ -872,10 +894,9 @@ export const AdminPanel: React.FC = () => {
 
   // Enriquecimento financeiro de cada pedido
   const financialOrders = orders.map(order => {
-    const totalInstallments =
-      order.paymentMethod === 'credit_card' ? Math.max(1, order.installments || 1) : 1;
-    const isInstallment = order.paymentMethod === 'credit_card' && totalInstallments > 1;
-    const isCash = !isInstallment; // PIX, Boleto ou Cartão 1x
+    const totalInstallments = Math.max(1, order.installments || 1);
+    const isInstallment = totalInstallments > 1;
+    const isCash = !isInstallment; // 1x À Vista (PIX, Boleto ou Cartão 1x)
     const installmentValue = order.total / totalInstallments;
 
     // Cálculo de taxas do gateway/maquininha
@@ -1517,12 +1538,12 @@ export const AdminPanel: React.FC = () => {
                               </div>
                             </td>
 
-                            {/* Modalidade & Plano */}
+                            {/* Modalidade & Plano (Definido pelo ADM) */}
                             <td className="py-3.5 px-4">
                               {f.isCash ? (
                                 <div className="space-y-1">
                                   <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-[10px] font-extrabold uppercase tracking-wider">
-                                    À Vista • {f.order.paymentMethod === 'credit_card' ? 'Cartão 1x' : f.order.paymentMethod.toUpperCase()}
+                                    À Vista • {f.order.paymentMethod === 'credit_card' ? 'Cartão 1x' : f.order.paymentMethod === 'boleto' ? 'Boleto' : 'PIX'}
                                   </span>
                                   <div className="text-[11px] text-neutral-600 font-semibold">
                                     Parcela Única de {formatBRL(f.order.total)}
@@ -1531,14 +1552,22 @@ export const AdminPanel: React.FC = () => {
                               ) : (
                                 <div className="space-y-1">
                                   <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 text-[10px] font-extrabold uppercase tracking-wider">
-                                    Parcelado • {f.totalInstallments}x
+                                    Parcelado • {f.totalInstallments}x ({f.order.paymentMethod === 'credit_card' ? 'Cartão' : f.order.paymentMethod.toUpperCase()})
                                   </span>
                                   <div className="font-bold text-indigo-950">
                                     {f.totalInstallments}x de {formatBRL(f.installmentValue)}
                                   </div>
-                                  <span className="block text-[10px] text-neutral-400">Sem juros p/ cliente</span>
+                                  <span className="block text-[10px] text-neutral-400">Condição aprovada pelo ADM</span>
                                 </div>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenConditionModal(f.order)}
+                                className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-[#8B1E3F] hover:underline cursor-pointer"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                <span>Definir Condição (ADM)</span>
+                              </button>
                             </td>
 
                             {/* Controle de Parcelas Recebidas */}
@@ -1726,6 +1755,23 @@ export const AdminPanel: React.FC = () => {
                                     Conciliado
                                   </span>
                                 )}
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    generateOrderConditionsPdf({
+                                      order: f.order,
+                                      settledInstallments: f.settledInstallments,
+                                      customTermsNote: f.order.adminPaymentTerms,
+                                      firstDueDate: f.order.adminFirstDueDate
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#8B1E3F] hover:bg-neutral-950 text-white text-[10px] font-bold transition cursor-pointer whitespace-nowrap"
+                                  title="Gerar PDF oficial com as condições de pagamento estabelecidas pelo ADM"
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  <span>Gerar PDF Condições</span>
+                                </button>
 
                                 <button
                                   type="button"
@@ -3328,6 +3374,208 @@ export const AdminPanel: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DEFINIR CONDIÇÃO DE PAGAMENTO PELO ADM & GERAR PDF */}
+      {conditionModalOrder && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="relative bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-neutral-200">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8B1E3F] block">
+                  Administração VASCONCELOS
+                </span>
+                <h3 className="text-lg font-bold text-neutral-950">
+                  Condições de Pagamento & Emissão de PDF
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Pedido <strong>{conditionModalOrder.orderNumber}</strong> • Cliente: <strong>{conditionModalOrder.customer.name}</strong> ({formatBRL(conditionModalOrder.total)})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConditionModalOrder(null)}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-900 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
+                    Forma de Pagamento
+                  </label>
+                  <select
+                    value={condMethod}
+                    onChange={(e) => setCondMethod(e.target.value as Order['paymentMethod'])}
+                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2.5 text-xs font-semibold"
+                  >
+                    <option value="pix">PIX (À Vista ou Parcelado)</option>
+                    <option value="credit_card">Cartão de Crédito</option>
+                    <option value="boleto">Boleto / Parcelamento Direto</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
+                    Plano (À Vista ou Parcelas)
+                  </label>
+                  <select
+                    value={condInstallments}
+                    onChange={(e) => setCondInstallments(Number(e.target.value))}
+                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2.5 text-xs font-bold"
+                  >
+                    <option value={1}>1x À Vista ({formatBRL(conditionModalOrder.total)})</option>
+                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                      <option key={n} value={n}>
+                        Parcelado em {n}x de {formatBRL(conditionModalOrder.total / n)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
+                    Vencimento / 1ª Parcela
+                  </label>
+                  <input
+                    type="text"
+                    value={condDueDate}
+                    onChange={(e) => setCondDueDate(e.target.value)}
+                    placeholder="Ex: Imediato, Dia 10/12, etc."
+                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
+                    Status Financeiro Inicial
+                  </label>
+                  <select
+                    value={condStatus}
+                    onChange={(e) => setCondStatus(e.target.value as Order['paymentStatus'])}
+                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2 text-xs font-semibold"
+                  >
+                    <option value="pending">Aguardando Pagamento / Em Aberto</option>
+                    <option value="paid">Aprovado / Em Curso</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
+                  Condições Estabelecidas pelo ADM (Sairá no PDF Oficial)
+                </label>
+                <textarea
+                  rows={3}
+                  value={condNotes}
+                  onChange={(e) => setCondNotes(e.target.value)}
+                  placeholder="Descreva as condições combinadas com o cliente (ex: Entrada via PIX + 2x a cada 30 dias, Entrega gratuita VasconcelosExpress)..."
+                  className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2 text-xs"
+                />
+              </div>
+
+              <div className="p-3 rounded-lg bg-[#F7F6F2] border border-neutral-200 flex items-center justify-between">
+                <span className="text-[11px] text-neutral-600">
+                  Modalidade de Entrega Fixa: <strong>VasconcelosExpress (R$ 0,00)</strong>
+                </span>
+                <span className="font-bold text-neutral-950">
+                  {condInstallments === 1
+                    ? `À Vista: ${formatBRL(conditionModalOrder.total)}`
+                    : `${condInstallments}x de ${formatBRL(conditionModalOrder.total / condInstallments)}`}
+                </span>
+              </div>
+
+              <div className="pt-3 border-t border-neutral-200 flex flex-col sm:flex-row gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateOrderPaymentConditions(conditionModalOrder.id, {
+                      paymentMethod: condMethod,
+                      installments: condInstallments,
+                      paymentStatus: condStatus,
+                      adminPaymentTerms: condNotes,
+                      adminFirstDueDate: condDueDate
+                    });
+
+                    const updatedOrder: Order = {
+                      ...conditionModalOrder,
+                      paymentMethod: condMethod,
+                      installments: condInstallments,
+                      paymentStatus: condStatus,
+                      adminPaymentTerms: condNotes,
+                      adminFirstDueDate: condDueDate
+                    };
+
+                    const digits = (updatedOrder.customer.phone || '').replace(/\D/g, '');
+                    const fullPhone = digits ? (digits.startsWith('55') ? digits : `55${digits}`) : '';
+                    const waText = [
+                      `Olá, *${updatedOrder.customer.name}*! Seguem as condições estabelecidas pela Administração *VASCONCELOS* para o seu pedido *${updatedOrder.orderNumber}*:`,
+                      ``,
+                      `🚚 *Entrega:* VasconcelosExpress (GRÁTIS - Sem custo adicional)`,
+                      `💳 *Condição de Pagamento:* ${
+                        condInstallments === 1
+                          ? `À Vista (${formatBRL(updatedOrder.total)})`
+                          : `Parcelado em ${condInstallments}x de ${formatBRL(updatedOrder.total / condInstallments)}`
+                      }`,
+                      `📅 *Vencimento:* ${condDueDate}`,
+                      `📝 *Detalhes:* ${condNotes}`,
+                      ``,
+                      `🔑 *Chave PIX / Contato ADM:* sandravasconcellossillva@gmail.com`
+                    ].join('\n');
+
+                    if (fullPhone) {
+                      window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(waText)}`, '_blank');
+                    }
+                    setConditionModalOrder(null);
+                  }}
+                  className="px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  <span>Salvar e Enviar no WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateOrderPaymentConditions(conditionModalOrder.id, {
+                      paymentMethod: condMethod,
+                      installments: condInstallments,
+                      paymentStatus: condStatus,
+                      adminPaymentTerms: condNotes,
+                      adminFirstDueDate: condDueDate
+                    });
+
+                    const updatedOrder: Order = {
+                      ...conditionModalOrder,
+                      paymentMethod: condMethod,
+                      installments: condInstallments,
+                      paymentStatus: condStatus,
+                      adminPaymentTerms: condNotes,
+                      adminFirstDueDate: condDueDate
+                    };
+
+                    generateOrderConditionsPdf({
+                      order: updatedOrder,
+                      settledInstallments: paidInstallmentsMap[updatedOrder.id] || 0,
+                      customTermsNote: condNotes,
+                      firstDueDate: condDueDate
+                    });
+                    setConditionModalOrder(null);
+                  }}
+                  className="px-5 py-2.5 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Salvar e Gerar PDF das Condições</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -6,10 +6,12 @@ import {
   MapPin, 
   LogOut, 
   Truck, 
-  Copy
+  Copy,
+  FileText
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatBRL, formatDate } from '../utils/formatters';
+import { generateOrderConditionsPdf } from '../utils/pdfGenerator';
 
 export const CustomerAccountModal: React.FC = () => {
   const { 
@@ -203,6 +205,27 @@ export const CustomerAccountModal: React.FC = () => {
                         </button>
                       </div>
                     )}
+
+                    {/* Condições do ADM & Botão de PDF */}
+                    <div className="pt-3 border-t border-neutral-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <span className="text-[11px] text-neutral-600">
+                        Entrega: <strong className="text-emerald-700">VasconcelosExpress (Grátis)</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          generateOrderConditionsPdf({
+                            order,
+                            customTermsNote: order.adminPaymentTerms,
+                            firstDueDate: order.adminFirstDueDate
+                          })
+                        }
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white text-[11px] font-bold transition cursor-pointer"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>Baixar PDF das Condições</span>
+                      </button>
+                    </div>
                   </div>
                 ))
               )}

@@ -129,6 +129,8 @@ export interface Order {
   installments?: number;
   trackingCode?: string;
   pixCopiaECola?: string;
+  adminPaymentTerms?: string;
+  adminFirstDueDate?: string;
 }
 
 export interface Coupon {
