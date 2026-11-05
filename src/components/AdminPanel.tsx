@@ -884,7 +884,7 @@ export const AdminPanel: React.FC = () => {
   // ============================================================================
   // CONTROLE FINANCEIRO: VENDAS À VISTA vs. PARCELADO (FLUXO DE CAIXA & RECEBÍVEIS)
   // ============================================================================
-  const [financeFilter, setFinanceFilter] = useState<'todos' | 'avista' | 'parcelado' | 'pendentes'>('todos');
+  const [financeFilter, setFinanceFilter] = useState<'todos' | 'avista' | 'parcelado' | 'pendentes' | 'quitados'>('todos');
   const [anticipationMode, setAnticipationMode] = useState<'fluxo_mensal' | 'antecipado_d1'>(() => {
     try {
       const saved = localStorage.getItem('vsc_finance_anticipation_mode');
@@ -1048,6 +1048,111 @@ export const AdminPanel: React.FC = () => {
     .filter(f => f.order.paymentStatus === 'paid')
     .reduce((s, f) => s + f.feeAmount, 0);
 
+  // Totais simplificados para leitura rápida do ADM
+  const totalAllOrdersGross = financialOrders.reduce((s, f) => s + f.order.total, 0);
+  const totalAllRemainingBalance = financialOrders.reduce((s, f) => s + f.remainingBalance, 0);
+  const deliveredOrdersCount = financialOrders.filter(f => f.order.orderStatus === 'entregue').length;
+  const waitingDeliveryOrdersCount = financialOrders.filter(f => f.order.orderStatus !== 'entregue').length;
+
+  // Ação rápida de 1 clique para quitar o saldo restante da compra na data de hoje
+  const handleQuickSettleOrder = (f: typeof financialOrders[number]) => {
+    const missing = Math.max(0, Number((f.order.total - f.receivedGross).toFixed(2)));
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const updatedReceipts: PaymentReceipt[] =
+      missing > 0.01
+        ? [
+            ...f.receipts,
+            {
+              id: `rec-${Date.now()}`,
+              date: todayIso,
+              amount: missing,
+              method: 'PIX',
+              note: 'Quitação rápida (1 clique ADM)'
+            }
+          ]
+        : f.receipts;
+
+    updateOrderPaymentConditions(f.order.id, {
+      paymentMethod: f.order.paymentMethod || 'pix',
+      installments: f.totalInstallments,
+      paymentStatus: 'paid',
+      adminPaymentTerms: f.order.adminPaymentTerms,
+      adminFirstDueDate: f.order.adminFirstDueDate,
+      paymentReceipts: updatedReceipts
+    });
+    handleUpdatePaidInstallments(f.order.id, f.totalInstallments, f.totalInstallments);
+  };
+
+  // Ação rápida para excluir um recebimento específico direto da tabela
+  const handleQuickRemoveReceipt = (order: Order, receiptId: string) => {
+    const nextReceipts = (order.paymentReceipts || []).filter((r) => r.id !== receiptId);
+    const totalPaid = nextReceipts.reduce((s, r) => s + Number(r.amount || 0), 0);
+    const nextStatus: Order['paymentStatus'] =
+      totalPaid >= order.total - 0.01 && nextReceipts.length > 0 ? 'paid' : 'pending';
+
+    updateOrderPaymentConditions(order.id, {
+      paymentMethod: order.paymentMethod || 'pix',
+      installments: Math.max(1, order.installments || 1),
+      paymentStatus: nextStatus,
+      adminPaymentTerms: order.adminPaymentTerms,
+      adminFirstDueDate: order.adminFirstDueDate,
+      paymentReceipts: nextReceipts
+    });
+  };
+
+  // Ação rápida de 1 clique para enviar o resumo de pagamentos e saldo direto no WhatsApp do cliente
+  const handleSendDirectWhatsAppSummary = (f: typeof financialOrders[number]) => {
+    const digits = (f.order.customer.phone || '').replace(/\D/g, '');
+    const receiptsLines =
+      f.receipts.length > 0
+        ? f.receipts
+            .map((r) => `• 📅 ${formatReceiptDateBr(r.date)}: *${formatBRL(r.amount)}*`)
+            .join('\n')
+        : f.receivedGross > 0
+          ? `• ✅ Pago anteriormente: *${formatBRL(f.receivedGross)}*`
+          : '• Nenhum valor registrado ainda';
+
+    const itemsLines = f.order.items
+      .map((it) => `• ${it.quantity}x ${it.name}`)
+      .join('\n');
+
+    const waText = [
+      `Olá, *${f.order.customer.name}*! 🌸`,
+      `Segue o resumo atualizado da sua compra *${f.order.orderNumber}* na *VASCONCELOS*:`,
+      ``,
+      `🛍️ *Produtos:*`,
+      itemsLines,
+      ``,
+      `💰 *Valor da Compra:* ${formatBRL(f.order.total)}`,
+      `✅ *Total Já Recebido:* ${formatBRL(f.receivedGross)}`,
+      `📌 *Saldo Restante a Pagar:* *${f.remainingBalance <= 0.01 && f.receivedGross > 0 ? 'R$ 0,00 (PAGO TOTAL ✅)' : formatBRL(f.remainingBalance)}*`,
+      ``,
+      `📅 *Datas & Valores Recebidos:*`,
+      receiptsLines,
+      ``,
+      `📦 *Status da Entrega:* ${f.order.orderStatus === 'entregue' ? '✅ Entregue' : '⏳ Aguardando Entrega (VasconcelosExpress - Frete Grátis)'}`,
+      `🔑 *Contato / Chave PIX ADM:* sandravasconcellossillva@gmail.com`
+    ].join('\n');
+
+    if (digits.length >= 10) {
+      const fullPhone = digits.startsWith('55') ? digits : `55${digits}`;
+      window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(waText)}`, '_blank', 'noopener,noreferrer');
+    } else {
+      handleSelectBillingCustomer({
+        id: `ord-${f.order.id}`,
+        name: f.order.customer.name,
+        email: f.order.customer.email,
+        phone: f.order.customer.phone,
+        orderNumber: f.order.orderNumber,
+        amount: f.remainingBalance > 0 ? f.remainingBalance : f.order.total,
+        paymentMethod: f.order.paymentMethod,
+        pixKey: f.order.pixCopiaECola || 'pix@vasconcelosbeauty.com.br',
+        orderStatus: f.order.orderStatus
+      });
+      setActiveTab('cobranca');
+    }
+  };
+
   // Cronograma de Recebíveis (Próximos 6 meses para vendas parceladas)
   const upcomingMonthsLabels = ['Próx. 30 dias', 'Em 60 dias', 'Em 90 dias', 'Em 120 dias', 'Em 150 dias', 'Em 180 dias'];
   const receivablesSchedule = upcomingMonthsLabels.map((label, monthIdx) => {
@@ -1068,13 +1173,21 @@ export const AdminPanel: React.FC = () => {
   const filteredFinancialOrders = financialOrders.filter(f => {
     if (financeFilter === 'avista' && !f.isCash) return false;
     if (financeFilter === 'parcelado' && !f.isInstallment) return false;
-    if (financeFilter === 'pendentes' && !(f.order.paymentStatus === 'pending' || f.remainingInstallments > 0)) return false;
+    if (financeFilter === 'pendentes' && f.remainingBalance <= 0.01) return false;
+    if (financeFilter === 'quitados' && !(f.remainingBalance <= 0.01 && f.receivedGross > 0)) return false;
 
-    const matchesStatus = orderStatusFilter === 'todos' || f.order.orderStatus === orderStatusFilter;
+    const matchesStatus =
+      orderStatusFilter === 'todos'
+        ? true
+        : orderStatusFilter === 'aguardando'
+          ? f.order.orderStatus !== 'entregue'
+          : f.order.orderStatus === orderStatusFilter;
+
     const matchesQuery =
       orderSearch.trim() === '' ||
       f.order.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
       f.order.customer.name.toLowerCase().includes(orderSearch.toLowerCase()) ||
+      (f.order.customer.phone || '').toLowerCase().includes(orderSearch.toLowerCase()) ||
       f.order.customer.email.toLowerCase().includes(orderSearch.toLowerCase());
 
     return matchesStatus && matchesQuery;
@@ -1275,262 +1388,169 @@ export const AdminPanel: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 1: CONTROLE FINANCEIRO (À VISTA vs. PARCELADO) & RELATÓRIOS */}
+        {/* TAB 1: CONTROLE SIMPLIFICADO DE PEDIDOS, PAGAMENTOS RECEBIDOS & ENTREGAS */}
         {activeTab === 'relatorios' && (
           <div className="space-y-8">
             {/* ====================================================================
-                PAINEL DE CONTROLE FINANCEIRO: VENDAS À VISTA vs. PARCELADAS
+                PAINEL FÁCIL PARA O ADM: COMPRAS, DATAS RECEBIDAS, SALDO E ENTREGA
                ==================================================================== */}
-            <div className="bg-white p-6 sm:p-8 rounded-2xl border border-neutral-200 shadow-xs space-y-6">
-              {/* Top Header & Regime Selector */}
+            <div className="bg-white p-5 sm:p-8 rounded-2xl border border-neutral-200 shadow-xs space-y-6">
+              {/* Cabeçalho Simples e Explicativo para o ADM */}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-neutral-200">
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700 block mb-1">
-                    Gestão de Caixa & Recebíveis em Tempo Real
+                  <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-emerald-700 block mb-1">
+                    Painel Fácil de Gestão • Vasconcelos
                   </span>
-                  <h2 className="text-xl sm:text-2xl font-bold text-neutral-950">
-                    Controle Financeiro: Vendas à Vista vs. Parceladas
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-neutral-950">
+                    Controle de Pedidos, Valores Recebidos e Entregas
                   </h2>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    Acompanhe o saldo líquido imediato em caixa, o cronograma de parcelas a receber do cartão e os títulos pendentes.
+                  <p className="text-xs sm:text-sm text-neutral-600 mt-1">
+                    Veja quem comprou, anote a <strong>data e o valor que recebeu</strong> (o saldo calcula sozinho) e marque se o pedido está <strong>Aguardando</strong> ou <strong>Entregue</strong>.
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <div className="bg-neutral-100 p-1 rounded-xl flex items-center text-xs font-bold border border-neutral-200">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAnticipationMode('fluxo_mensal')}
-                      className={`px-3 py-2 rounded-lg transition cursor-pointer ${
-                        anticipationMode === 'fluxo_mensal'
-                          ? 'bg-neutral-950 text-white shadow-xs'
-                          : 'text-neutral-600 hover:text-neutral-950'
-                      }`}
-                    >
-                      Fluxo Mensal (Parcela a Parcela)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleAnticipationMode('antecipado_d1')}
-                      className={`px-3 py-2 rounded-lg transition cursor-pointer ${
-                        anticipationMode === 'antecipado_d1'
-                          ? 'bg-emerald-700 text-white shadow-xs'
-                          : 'text-neutral-600 hover:text-neutral-950'
-                      }`}
-                    >
-                      Recebimento Antecipado (D+1)
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowFeeSettings(!showFeeSettings)}
-                    className="px-3.5 py-2.5 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-xs font-bold text-neutral-800 flex items-center gap-1.5 transition cursor-pointer"
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5" />
-                    <span>Taxas da Operadora</span>
-                  </button>
-
                   <button
                     type="button"
                     onClick={handleExportFinancialCsv}
-                    className="px-3.5 py-2.5 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
-                    title="Exportar planilha financeira e logística compatível com Excel"
+                    className="px-4 py-2.5 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-extrabold flex items-center gap-2 transition cursor-pointer shadow-xs"
+                    title="Baixar planilha para Excel"
                   >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    <span>Exportar Planilha (CSV)</span>
+                    <FileSpreadsheet className="w-4 h-4" />
+                    <span>Baixar Planilha (Excel)</span>
                   </button>
                 </div>
               </div>
 
-              {/* Configurable Gateway Fees Drawer */}
-              {showFeeSettings && (
-                <div className="p-4 sm:p-5 rounded-xl bg-neutral-50 border border-neutral-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-900">
-                      Configuração de Taxas do Gateway / Maquininha (Cálculo de Lucro Líquido)
-                    </h4>
-                    <button
-                      type="button"
-                      onClick={() => setShowFeeSettings(false)}
-                      className="text-xs text-neutral-500 hover:text-neutral-900 font-bold cursor-pointer"
-                    >
-                      Fechar
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
-                    <div>
-                      <label className="text-[11px] font-semibold text-neutral-600 block">Taxa PIX (%)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={pixFeePercent}
-                        onChange={(e) => setPixFeePercent(parseFloat(e.target.value) || 0)}
-                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-neutral-600 block">Cartão 1x À Vista (%)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={card1xFeePercent}
-                        onChange={(e) => setCard1xFeePercent(parseFloat(e.target.value) || 0)}
-                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-neutral-600 block">Base Parcelado (%)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={cardInstallmentBaseFee}
-                        onChange={(e) => setCardInstallmentBaseFee(parseFloat(e.target.value) || 0)}
-                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-neutral-600 block">Juros Antecipação / Parc. (%)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={cardPerInstallmentFee}
-                        onChange={(e) => setCardPerInstallmentFee(parseFloat(e.target.value) || 0)}
-                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-neutral-600 block">Tarifa Boleto (R$)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={boletoFixedFee}
-                        onChange={(e) => setBoletoFixedFee(parseFloat(e.target.value) || 0)}
-                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
-                      />
-                    </div>
+              {/* Guia Rápido de 3 Passos para facilitar o uso do ADM */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#F7F6F2] p-3.5 rounded-2xl border border-neutral-200 text-xs">
+                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-neutral-200/80">
+                  <span className="w-7 h-7 rounded-full bg-neutral-950 text-white font-extrabold flex items-center justify-center shrink-0">
+                    1
+                  </span>
+                  <div>
+                    <p className="font-extrabold text-neutral-900">Anote quando receber</p>
+                    <p className="text-[11px] text-neutral-600">
+                      Clique em <strong>+ Lançar Data e Valor Recebido</strong> ou em <strong>Quitar Tudo</strong>.
+                    </p>
                   </div>
                 </div>
-              )}
+                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-neutral-200/80">
+                  <span className="w-7 h-7 rounded-full bg-emerald-700 text-white font-extrabold flex items-center justify-center shrink-0">
+                    2
+                  </span>
+                  <div>
+                    <p className="font-extrabold text-neutral-900">Saldo calcula sozinho</p>
+                    <p className="text-[11px] text-neutral-600">
+                      O sistema mostra na hora quanto o cliente <strong>já pagou</strong> e quanto <strong>falta pagar</strong>.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-neutral-200/80">
+                  <span className="w-7 h-7 rounded-full bg-[#8B1E3F] text-white font-extrabold flex items-center justify-center shrink-0">
+                    3
+                  </span>
+                  <div>
+                    <p className="font-extrabold text-neutral-900">Marque a Entrega e Envie</p>
+                    <p className="text-[11px] text-neutral-600">
+                      Clique em <strong>Aguardando</strong> ou <strong>Entregue</strong> e envie o PDF ou WhatsApp ao cliente.
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-              {/* 4 Financial Breakdown Cards: À Vista vs. Parcelado vs. Em Caixa vs. A Receber */}
+              {/* 4 Cartões Grandes e Diretos: Valor das Compras | Já Recebido | Falta Receber | Entregas */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Card 1: Total Vendas à Vista */}
-                <div className="p-5 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
-                    <span>Vendas à Vista (PIX / 1x / Boleto)</span>
-                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px]">
-                      {cashSalesOrders.length} ped.
+                {/* Card 1: Total de Compras */}
+                <div className="p-5 rounded-2xl bg-neutral-50 border border-neutral-200 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-extrabold text-neutral-700">
+                    <span>1. Valor Total das Compras</span>
+                    <span className="px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-900 text-[10px] font-bold">
+                      {financialOrders.length} pedidos
                     </span>
                   </div>
-                  <p className="text-2xl font-extrabold text-neutral-950">
-                    {formatBRL(totalCashSalesGross)}
+                  <p className="text-2xl font-black text-neutral-950">
+                    {formatBRL(totalAllOrdersGross)}
                   </p>
-                  <p className="text-[11px] text-emerald-800 font-medium">
-                    Já compensado à vista: <strong>{formatBRL(totalCashPaidGross)}</strong>
+                  <p className="text-[11px] text-neutral-500 font-medium">
+                    Soma de todos os pedidos feitos no site
                   </p>
                 </div>
 
-                {/* Card 2: Total Vendas Parceladas */}
-                <div className="p-5 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
-                    <span>Vendas Parceladas (2x a 10x)</span>
-                    <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10px]">
-                      {installmentSalesOrders.length} ped.
-                    </span>
+                {/* Card 2: Total Já Recebido pelo ADM */}
+                <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-300 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-extrabold text-emerald-900">
+                    <span>2. Total Já Recebido (Caixa)</span>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700" />
                   </div>
-                  <p className="text-2xl font-extrabold text-neutral-950">
-                    {formatBRL(totalInstallmentSalesGross)}
+                  <p className="text-2xl font-black text-emerald-700">
+                    {formatBRL(totalAvailableInCashGross)}
                   </p>
-                  <p className="text-[11px] text-indigo-800 font-medium">
-                    {anticipationMode === 'antecipado_d1'
-                      ? 'Modalidade ativa: Antecipado em D+1'
-                      : `A receber futuro: ${formatBRL(totalFutureInstallmentsToReceive)}`}
+                  <p className="text-[11px] text-emerald-900 font-medium">
+                    Dinheiro já pago pelos clientes
                   </p>
                 </div>
 
-                {/* Card 3: Saldo Disponível em Caixa Hoje (Líquido) */}
-                <div className="p-5 rounded-xl bg-neutral-950 text-white space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-emerald-400">
-                    <span>Disponível em Caixa (Líquido)</span>
-                    <CheckCircle2 className="w-4 h-4" />
+                {/* Card 3: Total que Falta Receber (Saldo Restante) */}
+                <div className="p-5 rounded-2xl bg-amber-50/90 border border-amber-300 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-extrabold text-amber-950">
+                    <span>3. Falta Receber (Saldo)</span>
+                    <Clock className="w-4 h-4 text-[#8B1E3F]" />
                   </div>
-                  <p className="text-2xl font-extrabold text-white">
-                    {formatBRL(totalAvailableInCashNet)}
+                  <p className="text-2xl font-black text-[#8B1E3F]">
+                    {formatBRL(totalAllRemainingBalance)}
                   </p>
+                  <p className="text-[11px] text-amber-950 font-medium">
+                    Valor que os clientes ainda precisam pagar
+                  </p>
+                </div>
+
+                {/* Card 4: Resumo das Entregas */}
+                <div className="p-5 rounded-2xl bg-neutral-950 text-white space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-extrabold text-emerald-400">
+                    <span>4. Status das Entregas</span>
+                    <Truck className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <div className="flex items-baseline gap-3 pt-0.5">
+                    <div>
+                      <span className="text-2xl font-black text-emerald-400">{deliveredOrdersCount}</span>
+                      <span className="text-xs text-neutral-300 ml-1 font-bold">Entregues ✅</span>
+                    </div>
+                    <span className="text-neutral-600">•</span>
+                    <div>
+                      <span className="text-2xl font-black text-amber-400">{waitingDeliveryOrdersCount}</span>
+                      <span className="text-xs text-neutral-300 ml-1 font-bold">Aguardando ⏳</span>
+                    </div>
+                  </div>
                   <p className="text-[11px] text-neutral-400">
-                    Bruto liquidado: {formatBRL(totalAvailableInCashGross)} (Taxas: -{formatBRL(totalGatewayFeesAmount)})
-                  </p>
-                </div>
-
-                {/* Card 4: A Receber (Parcelas Futuras + Pendentes) */}
-                <div className="p-5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-amber-900">
-                    <span>Total a Receber (Futuro)</span>
-                    <Clock className="w-4 h-4 text-amber-700" />
-                  </div>
-                  <p className="text-2xl font-extrabold text-neutral-950">
-                    {formatBRL(totalFutureInstallmentsToReceive + totalPendingOrdersAmount)}
-                  </p>
-                  <p className="text-[11px] text-amber-900 font-medium">
-                    Parcelas cartão: <strong>{formatBRL(totalFutureInstallmentsToReceive)}</strong> • Cobrança aberta: <strong>{formatBRL(totalPendingOrdersAmount)}</strong>
+                    Modalidade: VasconcelosExpress (Frete Grátis)
                   </p>
                 </div>
               </div>
 
-              {/* Cronograma de Recebíveis (Próximos 6 Meses de Parcelas) */}
-              {anticipationMode === 'fluxo_mensal' && (
-                <div className="p-5 rounded-xl bg-neutral-50 border border-neutral-200 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-900">
-                        Calendário de Recebíveis Mensais (Previsão de Entrada das Parcelas de Cartão)
-                      </h3>
-                      <p className="text-[11px] text-neutral-500">
-                        Valores garantidos que entrarão automaticamente a cada 30 dias referentes às vendas parceladas ainda em aberto:
-                      </p>
-                    </div>
-                    <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-lg">
-                      Saldo Parcelado a Entrar: {formatBRL(totalFutureInstallmentsToReceive)}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-1">
-                    {receivablesSchedule.map((slot, idx) => (
-                      <div key={idx} className="bg-white p-3.5 rounded-xl border border-neutral-200">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block">
-                          {slot.label}
-                        </span>
-                        <p className="text-base font-extrabold text-neutral-950 mt-1">
-                          {formatBRL(slot.amount)}
-                        </p>
-                        <span className="text-[10px] text-indigo-700 font-semibold block mt-0.5">
-                          {slot.parcelsCount} {slot.parcelsCount === 1 ? 'parcela prevista' : 'parcelas previstas'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Tabela Analítica Unificada de Vendas, Logística & Parcelas */}
+              {/* Filtros Claros + Busca */}
               <div className="space-y-4">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                   <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0">
                     {[
-                      { id: 'todos', label: `Todas as Vendas (${financialOrders.length})` },
-                      { id: 'avista', label: `Somente À Vista (${cashSalesOrders.length})` },
-                      { id: 'parcelado', label: `Somente Parcelado (${installmentSalesOrders.length})` },
-                      { id: 'pendentes', label: 'Com Saldo a Receber' }
-                    ].map(tab => (
+                      { id: 'todos', label: `📋 Todos os Pedidos (${financialOrders.length})` },
+                      {
+                        id: 'pendentes',
+                        label: `⏳ Falta Receber (${financialOrders.filter((x) => x.remainingBalance > 0.01).length})`
+                      },
+                      {
+                        id: 'quitados',
+                        label: `✅ Já Quitados (${financialOrders.filter((x) => x.remainingBalance <= 0.01 && x.receivedGross > 0).length})`
+                      }
+                    ].map((tab) => (
                       <button
                         key={tab.id}
                         type="button"
                         onClick={() => setFinanceFilter(tab.id as any)}
-                        className={`px-3.5 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer ${
                           financeFilter === tab.id
-                            ? 'bg-neutral-950 text-white'
-                            : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                            ? 'bg-neutral-950 text-white shadow-xs'
+                            : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
                         }`}
                       >
                         {tab.label}
@@ -1538,138 +1558,130 @@ export const AdminPanel: React.FC = () => {
                     ))}
                   </div>
 
-                  {/* Busca e Filtro de Status Logístico Unificados */}
+                  {/* Busca e Filtro Simples de Entrega (Entregue ou Aguardando) */}
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                    <div className="relative min-w-[230px]">
+                    <div className="relative min-w-[240px]">
                       <input
                         type="text"
-                        placeholder="Buscar pedido, cliente ou e-mail..."
+                        placeholder="Buscar nome do cliente, WhatsApp ou pedido..."
                         value={orderSearch}
                         onChange={(e) => setOrderSearch(e.target.value)}
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-hidden focus:border-neutral-900"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl pl-8 pr-3 py-2 text-xs font-medium focus:outline-hidden focus:border-neutral-900"
                       />
-                      <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2" />
+                      <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2.5" />
                     </div>
 
                     <select
                       value={orderStatusFilter}
                       onChange={(e) => setOrderStatusFilter(e.target.value)}
-                      className="bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-neutral-800 cursor-pointer"
+                      className="bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs font-extrabold text-neutral-800 cursor-pointer"
                     >
-                      <option value="todos">Status Logístico: Todos</option>
-                      <option value="pendente">Pendente</option>
-                      <option value="pago">Pago</option>
-                      <option value="separacao">Em Separação</option>
-                      <option value="enviado">Enviado</option>
-                      <option value="entregue">Entregue</option>
+                      <option value="todos">📦 Entrega: Mostrar Todos</option>
+                      <option value="aguardando">⏳ Somente Aguardando Entrega</option>
+                      <option value="entregue">✅ Somente Já Entregues</option>
                     </select>
                   </div>
                 </div>
 
                 {/* =========================================================
-                    VISÃO CELULAR (MOBILE-FIRST CARDS PARA O ADM) - lg:hidden
+                    VISÃO CELULAR (CARTÕES ADAPTADOS PARA O ADM) - lg:hidden
                    ========================================================= */}
                 <div className="lg:hidden space-y-4">
                   {filteredFinancialOrders.map((f) => {
-                    const statusColors: Record<OrderStatus, string> = {
-                      pendente: 'bg-amber-100 text-amber-800',
-                      pago: 'bg-blue-100 text-blue-800',
-                      separacao: 'bg-purple-100 text-purple-800',
-                      enviado: 'bg-indigo-100 text-indigo-800',
-                      entregue: 'bg-emerald-100 text-emerald-800'
-                    };
                     const isQuitado = f.remainingBalance <= 0.01 && f.receivedGross > 0;
+                    const isEntregue = f.order.orderStatus === 'entregue';
 
                     return (
                       <div
                         key={`mob-${f.order.id}`}
-                        className="p-4 rounded-2xl bg-[#F7F6F2] border border-neutral-300 shadow-xs space-y-3.5"
+                        className="p-4 rounded-2xl bg-[#F7F6F2] border-2 border-neutral-300 shadow-xs space-y-4"
                       >
-                        {/* Topo do Card: Número do Pedido, Data e Status */}
-                        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-neutral-200">
+                        {/* 1. Pedido / Cliente / Itens */}
+                        <div className="flex items-start justify-between gap-2 pb-3 border-b border-neutral-200">
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="font-mono font-extrabold text-sm text-neutral-950">
+                              <span className="font-mono font-black text-sm text-neutral-950">
                                 {f.order.orderNumber}
                               </span>
-                              <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                                  isQuitado
-                                    ? 'bg-emerald-100 text-emerald-800'
-                                    : f.receivedGross > 0
-                                      ? 'bg-indigo-100 text-indigo-800'
-                                      : 'bg-amber-100 text-amber-800'
-                                }`}
-                              >
-                                {isQuitado
-                                  ? 'Quitado ✅'
-                                  : f.receivedGross > 0
-                                    ? 'Pago Parcial'
-                                    : 'Saldo em Aberto'}
+                              <span className="text-[11px] text-neutral-500">
+                                {formatDate(f.order.createdAt)}
                               </span>
                             </div>
-                            <span className="text-[11px] text-neutral-500">
-                              Data do pedido: {formatDate(f.order.createdAt)}
-                            </span>
-                          </div>
-
-                          <select
-                            value={f.order.orderStatus}
-                            onChange={(e) =>
-                              updateOrderStatus(f.order.id, e.target.value as OrderStatus)
-                            }
-                            className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold border border-neutral-300 ${statusColors[f.order.orderStatus]}`}
-                          >
-                            <option value="pendente">Pendente</option>
-                            <option value="pago">Pago</option>
-                            <option value="separacao">Separação</option>
-                            <option value="enviado">Enviado</option>
-                            <option value="entregue">Entregue</option>
-                          </select>
-                        </div>
-
-                        {/* Cliente & Produtos */}
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-extrabold text-neutral-950">
+                            <p className="text-base font-extrabold text-neutral-950 mt-0.5">
                               {f.order.customer.name}
                             </p>
                             {f.order.customer.phone && (
-                              <span className="text-xs font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              <span className="inline-block mt-1 text-xs font-mono font-bold text-emerald-900 bg-emerald-100/80 px-2 py-0.5 rounded-lg border border-emerald-300">
                                 📱 {f.order.customer.phone}
                               </span>
                             )}
                           </div>
-                          <div className="bg-white rounded-xl p-2.5 border border-neutral-200 space-y-1">
-                            {f.order.items.map((it, idx) => (
-                              <p key={idx} className="text-xs text-neutral-800 flex justify-between">
-                                <span className="truncate pr-2">
-                                  <strong>{it.quantity}x</strong> {it.name}
-                                </span>
-                                <span className="font-bold shrink-0">
-                                  {formatBRL(it.price * it.quantity)}
-                                </span>
-                              </p>
-                            ))}
+
+                          {/* Status (Entregue ou Aguardando) em 1 Toque no Celular */}
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-500">
+                              Status da Entrega:
+                            </span>
+                            <div className="inline-flex rounded-xl bg-white p-1 border border-neutral-300 shadow-2xs">
+                              <button
+                                type="button"
+                                onClick={() => updateOrderStatus(f.order.id, 'pendente')}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer ${
+                                  !isEntregue
+                                    ? 'bg-amber-400 text-neutral-950 shadow-2xs'
+                                    : 'text-neutral-500 hover:text-neutral-900'
+                                }`}
+                              >
+                                ⏳ Aguardando
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateOrderStatus(f.order.id, 'entregue')}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer ${
+                                  isEntregue
+                                    ? 'bg-emerald-600 text-white shadow-2xs'
+                                    : 'text-neutral-500 hover:text-neutral-900'
+                                }`}
+                              >
+                                ✅ Entregue
+                              </button>
+                            </div>
                           </div>
                         </div>
 
-                        {/* RESUMO SIMPLES DE SALDO PARA O ADM NO CELULAR */}
+                        {/* Itens da Compra */}
+                        <div className="bg-white rounded-xl p-3 border border-neutral-200 space-y-1">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-400 block">
+                            Itens do Pedido:
+                          </span>
+                          {f.order.items.map((it, idx) => (
+                            <p key={idx} className="text-xs text-neutral-800 flex justify-between">
+                              <span className="truncate pr-2">
+                                <strong>{it.quantity}x</strong> {it.name}
+                              </span>
+                              <span className="font-bold shrink-0">
+                                {formatBRL(it.price * it.quantity)}
+                              </span>
+                            </p>
+                          ))}
+                        </div>
+
+                        {/* 2 & 4. Valor da Compra | Recebido vs. Saldo Restante */}
                         <div className="grid grid-cols-3 gap-2 text-center">
                           <div className="p-2.5 rounded-xl bg-white border border-neutral-200">
-                            <span className="text-[9px] font-bold uppercase text-neutral-500 block">
-                              Total Compra
+                            <span className="text-[9px] font-extrabold uppercase text-neutral-500 block">
+                              Valor da Compra
                             </span>
-                            <p className="text-xs sm:text-sm font-extrabold text-neutral-950 mt-0.5">
+                            <p className="text-xs sm:text-sm font-black text-neutral-950 mt-0.5">
                               {formatBRL(f.order.total)}
                             </p>
                           </div>
 
                           <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                            <span className="text-[9px] font-bold uppercase text-emerald-800 block">
+                            <span className="text-[9px] font-extrabold uppercase text-emerald-800 block">
                               Já Recebido
                             </span>
-                            <p className="text-xs sm:text-sm font-extrabold text-emerald-700 mt-0.5">
+                            <p className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5">
                               {formatBRL(f.receivedGross)}
                             </p>
                           </div>
@@ -1677,59 +1689,88 @@ export const AdminPanel: React.FC = () => {
                           <div
                             className={`p-2.5 rounded-xl border ${
                               isQuitado
-                                ? 'bg-emerald-50 border-emerald-200'
+                                ? 'bg-emerald-100 border-emerald-300'
                                 : 'bg-amber-50 border-amber-300'
                             }`}
                           >
                             <span
-                              className={`text-[9px] font-bold uppercase block ${
-                                isQuitado ? 'text-emerald-800' : 'text-amber-900'
+                              className={`text-[9px] font-extrabold uppercase block ${
+                                isQuitado ? 'text-emerald-900' : 'text-amber-950'
                               }`}
                             >
-                              Saldo a Receber
+                              Saldo Restante
                             </span>
                             <p
-                              className={`text-xs sm:text-sm font-extrabold mt-0.5 ${
-                                isQuitado ? 'text-emerald-700' : 'text-[#8B1E3F]'
+                              className={`text-xs sm:text-sm font-black mt-0.5 ${
+                                isQuitado ? 'text-emerald-800' : 'text-[#8B1E3F]'
                               }`}
                             >
-                              {isQuitado ? 'R$ 0,00' : formatBRL(f.remainingBalance)}
+                              {isQuitado ? 'Pago ✅' : formatBRL(f.remainingBalance)}
                             </p>
                           </div>
                         </div>
 
-                        {/* Histórico de Datas e Valores Recebidos pelo ADM */}
-                        {f.receipts.length > 0 && (
-                          <div className="bg-white rounded-xl p-2.5 border border-emerald-200 space-y-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
-                              Recebimentos Lançados pelo ADM:
-                            </span>
-                            {f.receipts.map((r) => (
-                              <div
-                                key={r.id}
-                                className="flex items-center justify-between text-xs text-neutral-800"
-                              >
-                                <span>
-                                  📅 <strong>{formatReceiptDateBr(r.date)}</strong> ({r.method || 'PIX'})
-                                </span>
-                                <span className="font-extrabold text-emerald-700">
-                                  + {formatBRL(r.amount)}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {/* 3. Datas & Valores Recebidos (ADM) */}
+                        <div className="bg-white rounded-xl p-3 border border-emerald-200 space-y-2">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-900 block">
+                            Datas & Valores Recebidos (ADM):
+                          </span>
+                          {f.receipts.length > 0 ? (
+                            <div className="space-y-1.5">
+                              {f.receipts.map((r) => (
+                                <div
+                                  key={r.id}
+                                  className="flex items-center justify-between text-xs bg-emerald-50/70 px-2.5 py-1.5 rounded-lg border border-emerald-200"
+                                >
+                                  <span className="font-bold text-neutral-800">
+                                    📅 {formatReceiptDateBr(r.date)}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-black text-emerald-700">
+                                      {formatBRL(r.amount)}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleQuickRemoveReceipt(f.order, r.id)}
+                                      className="text-neutral-400 hover:text-red-600 p-0.5 cursor-pointer"
+                                      title="Apagar este lançamento"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-neutral-500">
+                              {isQuitado
+                                ? `Pago integralmente (${formatBRL(f.order.total)})`
+                                : 'Nenhuma data/valor lançado ainda.'}
+                            </p>
+                          )}
 
-                        {/* Botões Grandes para o ADM usar no Celular */}
-                        <div className="space-y-2 pt-1">
                           <button
                             type="button"
                             onClick={() => handleOpenConditionModal(f.order)}
-                            className="w-full py-3 px-4 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+                            className="w-full py-2.5 px-3 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer"
                           >
-                            <DollarSign className="w-4 h-4" />
-                            <span>Lançar Data e Valor Recebido / Ver Saldo</span>
+                            <Plus className="w-4 h-4" />
+                            <span>Lançar Data e Valor Recebido</span>
                           </button>
+                        </div>
+
+                        {/* 6. AÇÕES no Celular */}
+                        <div className="space-y-2 pt-1">
+                          {!isQuitado && (
+                            <button
+                              type="button"
+                              onClick={() => handleQuickSettleOrder(f)}
+                              className="w-full py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Quitar Tudo Agora ({formatBRL(f.remainingBalance)})</span>
+                            </button>
+                          )}
 
                           <div className="grid grid-cols-2 gap-2">
                             <button
@@ -1743,32 +1784,19 @@ export const AdminPanel: React.FC = () => {
                                   paymentReceipts: f.receipts
                                 })
                               }
-                              className="py-2.5 px-3 rounded-xl bg-[#8B1E3F] text-white text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                              className="py-2.5 px-3 rounded-xl bg-[#8B1E3F] text-white text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <FileText className="w-3.5 h-3.5" />
-                              <span>Gerar PDF c/ Saldo</span>
+                              <span>Gerar PDF Condições</span>
                             </button>
 
                             <button
                               type="button"
-                              onClick={() => {
-                                handleSelectBillingCustomer({
-                                  id: `ord-${f.order.id}`,
-                                  name: f.order.customer.name,
-                                  email: f.order.customer.email,
-                                  phone: f.order.customer.phone,
-                                  orderNumber: f.order.orderNumber,
-                                  amount: f.remainingBalance > 0 ? f.remainingBalance : f.order.total,
-                                  paymentMethod: f.order.paymentMethod,
-                                  pixKey: f.order.pixCopiaECola || 'pix@vasconcelosbeauty.com.br',
-                                  orderStatus: f.order.orderStatus
-                                });
-                                setActiveTab('cobranca');
-                              }}
-                              className="py-2.5 px-3 rounded-xl bg-emerald-700 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                              onClick={() => handleSendDirectWhatsAppSummary(f)}
+                              className="py-2.5 px-3 rounded-xl bg-emerald-600 text-white text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
                             >
                               <MessageCircle className="w-3.5 h-3.5" />
-                              <span>Cobrar Saldo</span>
+                              <span>Enviar WhatsApp</span>
                             </button>
                           </div>
                         </div>
@@ -1778,298 +1806,212 @@ export const AdminPanel: React.FC = () => {
                 </div>
 
                 {/* =========================================================
-                    VISÃO COMPUTADOR (TABELA WEB COMPLETA) - hidden lg:block
+                    VISÃO COMPUTADOR (TABELA WEB COM AS 6 COLUNAS EXATAS) - hidden lg:block
+                    | Pedido / Cliente / Itens | Valor da Compra | Datas & Valores Recebidos (ADM) | Recebido vs. Saldo Restante | Status ( Entregue ou Aguardando ) | AÇÕES
                    ========================================================= */}
-                <div className="hidden lg:block overflow-x-auto border border-neutral-200 rounded-xl">
+                <div className="hidden lg:block overflow-x-auto border border-neutral-200 rounded-2xl shadow-2xs">
                   <table className="w-full text-left text-xs">
-                    <thead className="bg-neutral-50 text-neutral-600 font-bold uppercase tracking-wider border-b border-neutral-200">
+                    <thead className="bg-neutral-100 text-neutral-700 font-extrabold uppercase tracking-wider border-b border-neutral-200">
                       <tr>
-                        <th className="py-3 px-4">Pedido / Cliente / Itens</th>
-                        <th className="py-3 px-4">Datas & Valores Recebidos (ADM)</th>
-                        <th className="py-3 px-4">Controle de Parcelas</th>
-                        <th className="py-3 px-4">Valor da Compra</th>
-                        <th className="py-3 px-4">Recebido vs. Saldo Restante</th>
-                        <th className="py-3 px-4">Logística & Rastreio</th>
-                        <th className="py-3 px-4 text-right">Ações</th>
+                        <th className="py-4 px-4">Pedido / Cliente / Itens</th>
+                        <th className="py-4 px-4">Valor da Compra</th>
+                        <th className="py-4 px-4">Datas & Valores Recebidos (ADM)</th>
+                        <th className="py-4 px-4">Recebido vs. Saldo Restante</th>
+                        <th className="py-4 px-4">Status ( Entregue ou Aguardando )</th>
+                        <th className="py-4 px-4 text-right">AÇÕES</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-200">
+                    <tbody className="divide-y divide-neutral-200 bg-white">
                       {filteredFinancialOrders.map((f) => {
                         const isFullySettled =
                           f.remainingBalance <= 0.01 && f.receivedGross > 0;
-                        const statusColors: Record<OrderStatus, string> = {
-                          pendente: 'bg-amber-100 text-amber-800',
-                          pago: 'bg-blue-100 text-blue-800',
-                          separacao: 'bg-purple-100 text-purple-800',
-                          enviado: 'bg-indigo-100 text-indigo-800',
-                          entregue: 'bg-emerald-100 text-emerald-800'
-                        };
+                        const isEntregue = f.order.orderStatus === 'entregue';
+                        const paidPercentage = Math.min(
+                          100,
+                          Math.round((f.receivedGross / Math.max(1, f.order.total)) * 100)
+                        );
 
                         return (
-                          <tr key={f.order.id} className="hover:bg-neutral-50/80 transition align-top">
-                            {/* Pedido, Cliente & Itens */}
-                            <td className="py-3.5 px-4 max-w-[240px]">
+                          <tr key={f.order.id} className="hover:bg-neutral-50/90 transition align-top">
+                            {/* COLUNA 1: Pedido / Cliente / Itens */}
+                            <td className="py-4 px-4 max-w-[260px]">
                               <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-neutral-950">{f.order.orderNumber}</span>
-                                <span className="text-[10px] text-neutral-400">{formatDate(f.order.createdAt)}</span>
+                                <span className="font-mono font-black text-sm text-neutral-950">
+                                  {f.order.orderNumber}
+                                </span>
+                                <span className="text-[11px] text-neutral-400 font-medium">
+                                  {formatDate(f.order.createdAt)}
+                                </span>
                               </div>
-                              <div className="font-semibold text-neutral-900 mt-0.5">{f.order.customer.name}</div>
-                              <div className="text-[10px] text-neutral-500">
-                                {f.order.customer.phone || f.order.customer.email}
+                              <div className="font-extrabold text-sm text-neutral-950 mt-0.5">
+                                {f.order.customer.name}
                               </div>
-                              <div className="mt-1.5 pt-1.5 border-t border-neutral-100 space-y-0.5">
+                              <div className="text-[11px] text-neutral-600 font-medium mt-0.5">
+                                {f.order.customer.phone ? `📱 ${f.order.customer.phone}` : f.order.customer.email}
+                              </div>
+                              <div className="mt-2 pt-2 border-t border-neutral-100 space-y-1">
                                 {f.order.items.map((it, idx) => (
-                                  <p key={idx} className="text-[11px] text-neutral-700 truncate">
-                                    <span className="font-bold">{it.quantity}x</span> {it.name}
+                                  <p key={idx} className="text-[11px] text-neutral-800 truncate">
+                                    <span className="font-extrabold text-neutral-950">{it.quantity}×</span> {it.name}
                                   </p>
                                 ))}
                               </div>
                             </td>
 
-                            {/* Datas & Valores Recebidos pelo ADM */}
-                            <td className="py-3.5 px-4">
+                            {/* COLUNA 2: Valor da Compra */}
+                            <td className="py-4 px-4 whitespace-nowrap">
+                              <div className="text-base font-black text-neutral-950">
+                                {formatBRL(f.order.total)}
+                              </div>
+                              <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-600 text-[10px] font-bold">
+                                Valor Total da Compra
+                              </span>
+                            </td>
+
+                            {/* COLUNA 3: Datas & Valores Recebidos (ADM) */}
+                            <td className="py-4 px-4 min-w-[230px]">
                               {f.receipts.length > 0 ? (
-                                <div className="space-y-1">
+                                <div className="space-y-1.5 mb-2.5">
                                   {f.receipts.map((r) => (
                                     <div
                                       key={r.id}
-                                      className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 text-[11px]"
+                                      className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5 text-xs"
                                     >
-                                      <span className="font-semibold text-neutral-800">
+                                      <span className="font-bold text-neutral-900">
                                         📅 {formatReceiptDateBr(r.date)}
                                       </span>
-                                      <span className="font-extrabold text-emerald-700">
-                                        {formatBRL(r.amount)}
-                                      </span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-black text-emerald-700">
+                                          {formatBRL(r.amount)}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleQuickRemoveReceipt(f.order, r.id)}
+                                          className="text-neutral-400 hover:text-red-600 transition cursor-pointer"
+                                          title="Apagar este valor"
+                                        >
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
-                              ) : f.isCash ? (
-                                <div className="space-y-1">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-[10px] font-extrabold uppercase tracking-wider">
-                                    À Vista • {f.order.paymentMethod === 'credit_card' ? 'Cartão 1x' : f.order.paymentMethod === 'boleto' ? 'Boleto' : 'PIX'}
-                                  </span>
-                                  <div className="text-[11px] text-neutral-600 font-semibold">
-                                    Valor: {formatBRL(f.order.total)}
-                                  </div>
+                              ) : isFullySettled ? (
+                                <div className="mb-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] font-bold">
+                                  ✅ Recebido à vista: {formatBRL(f.receivedGross)}
                                 </div>
                               ) : (
-                                <div className="space-y-1">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 text-[10px] font-extrabold uppercase tracking-wider">
-                                    Parcelado • {f.totalInstallments}x
-                                  </span>
-                                  <div className="font-bold text-indigo-950">
-                                    {f.totalInstallments}x de {formatBRL(f.installmentValue)}
-                                  </div>
+                                <div className="mb-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold">
+                                  ⏳ Nenhum valor lançado ainda
                                 </div>
                               )}
+
                               <button
                                 type="button"
                                 onClick={() => handleOpenConditionModal(f.order)}
-                                className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white text-[10px] font-bold transition cursor-pointer"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-[11px] font-extrabold transition cursor-pointer shadow-2xs"
                               >
-                                <Plus className="w-3 h-3" />
+                                <Plus className="w-3.5 h-3.5" />
                                 <span>Lançar Data e Valor Recebido</span>
                               </button>
                             </td>
 
-                            {/* Controle de Parcelas Recebidas */}
-                            <td className="py-3.5 px-4">
-                              {isFullySettled ? (
-                                <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Compra Quitada
-                                </span>
-                              ) : f.hasCustomReceipts ? (
-                                <div className="space-y-1">
-                                  <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 font-bold text-[10px] uppercase">
-                                    {f.receipts.length} {f.receipts.length === 1 ? 'Recebimento' : 'Recebimentos'}
+                            {/* COLUNA 4: Recebido vs. Saldo Restante */}
+                            <td className="py-4 px-4 min-w-[210px]">
+                              <div className="space-y-1.5">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="font-bold text-neutral-600">Já recebido:</span>
+                                  <span className="font-black text-emerald-700 text-sm">
+                                    {formatBRL(f.receivedGross)}
                                   </span>
-                                  <div className="w-28 bg-neutral-200 h-1.5 rounded-full overflow-hidden">
-                                    <div
-                                      className="bg-emerald-600 h-full rounded-full transition-all"
-                                      style={{
-                                        width: `${Math.min(100, Math.round((f.receivedGross / Math.max(1, f.order.total)) * 100))}%`
-                                      }}
-                                    />
-                                  </div>
                                 </div>
-                              ) : f.order.paymentStatus === 'pending' ? (
-                                <span className="px-2 py-1 rounded bg-amber-100 text-amber-900 font-bold text-[10px] uppercase">
-                                  Aguardando Pagamento
-                                </span>
-                              ) : f.isCash ? (
-                                <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  1/1 Liquidado à Vista
-                                </span>
-                              ) : anticipationMode === 'antecipado_d1' ? (
-                                <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  {f.totalInstallments}/{f.totalInstallments} Antecipado (D+1)
-                                </span>
-                              ) : (
-                                <div className="space-y-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleUpdatePaidInstallments(
-                                          f.order.id,
-                                          f.settledInstallments - 1,
-                                          f.totalInstallments
-                                        )
-                                      }
-                                      className="w-6 h-6 rounded bg-neutral-200 hover:bg-neutral-300 text-neutral-900 font-bold flex items-center justify-center cursor-pointer"
-                                      title="Reduzir parcela recebida"
-                                    >
-                                      -
-                                    </button>
-                                    <span className="font-mono font-bold text-neutral-900">
-                                      {f.settledInstallments} / {f.totalInstallments} recebidas
+
+                                {f.remainingBalance > 0.01 ? (
+                                  <div className="flex items-center justify-between text-xs pt-1 border-t border-neutral-100">
+                                    <span className="font-bold text-neutral-600">Saldo restante:</span>
+                                    <span className="font-black text-[#8B1E3F] text-sm">
+                                      {formatBRL(f.remainingBalance)}
                                     </span>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleUpdatePaidInstallments(
-                                          f.order.id,
-                                          f.settledInstallments + 1,
-                                          f.totalInstallments
-                                        )
-                                      }
-                                      className="w-6 h-6 rounded bg-neutral-900 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer"
-                                      title="Confirmar recebimento da próxima parcela"
-                                    >
-                                      +
-                                    </button>
                                   </div>
-                                  <div className="w-28 bg-neutral-200 h-1.5 rounded-full overflow-hidden">
-                                    <div
-                                      className="bg-indigo-600 h-full rounded-full transition-all"
-                                      style={{
-                                        width: `${Math.round((f.settledInstallments / f.totalInstallments) * 100)}%`
-                                      }}
-                                    />
+                                ) : (
+                                  <div className="pt-1">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-extrabold text-[11px]">
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
+                                      QUITADO (Saldo R$ 0,00)
+                                    </span>
                                   </div>
-                                </div>
-                              )}
-                            </td>
+                                )}
 
-                            {/* Valor da Compra */}
-                            <td className="py-3.5 px-4">
-                              <div className="font-extrabold text-neutral-950">
-                                Total: {formatBRL(f.order.total)}
-                              </div>
-                              <div className="text-[11px] text-emerald-700 font-semibold">
-                                Líquido: {formatBRL(f.netTotal)}
-                              </div>
-                            </td>
-
-                            {/* Já Recebido vs. Saldo Restante */}
-                            <td className="py-3.5 px-4">
-                              <div className="text-emerald-700 font-bold">
-                                Já recebido: {formatBRL(f.receivedGross)}
-                              </div>
-                              {f.remainingBalance > 0.01 ? (
-                                <div className="text-[#8B1E3F] font-extrabold text-[11px] mt-0.5">
-                                  Saldo restante: {formatBRL(f.remainingBalance)}
-                                </div>
-                              ) : (
-                                <div className="text-emerald-700 font-bold text-[11px] mt-0.5">
-                                  Saldo R$ 0,00 (Quitado ✅)
-                                </div>
-                              )}
-                            </td>
-
-                            {/* Logística & Rastreio */}
-                            <td className="py-3.5 px-4 space-y-2">
-                              <div className="flex items-center gap-1.5">
-                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${statusColors[f.order.orderStatus]}`}>
-                                  {f.order.orderStatus}
-                                </span>
-                                <select
-                                  value={f.order.orderStatus}
-                                  onChange={(e) => updateOrderStatus(f.order.id, e.target.value as OrderStatus)}
-                                  className="bg-white border border-neutral-300 rounded-lg px-2 py-1 text-[11px] font-semibold focus:outline-hidden cursor-pointer"
-                                  title="Alterar status logístico do pedido"
-                                >
-                                  <option value="pendente">Pendente</option>
-                                  <option value="pago">Pago</option>
-                                  <option value="separacao">Em Separação</option>
-                                  <option value="enviado">Enviado</option>
-                                  <option value="entregue">Entregue</option>
-                                </select>
-                              </div>
-
-                              {/* Código de Rastreio Editável */}
-                              {editingOrderId === f.order.id ? (
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="text"
-                                    value={trackingInput}
-                                    onChange={(e) => setTrackingInput(e.target.value.toUpperCase())}
-                                    placeholder="Ex: BR9928192BR"
-                                    className="w-28 bg-white border border-neutral-300 rounded-lg px-2 py-1 text-[11px] font-mono"
+                                {/* Barra simples de progresso */}
+                                <div className="w-full bg-neutral-200 h-2 rounded-full overflow-hidden mt-1">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${
+                                      isFullySettled ? 'bg-emerald-600' : 'bg-[#8B1E3F]'
+                                    }`}
+                                    style={{ width: `${paidPercentage}%` }}
                                   />
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      updateOrderStatus(f.order.id, f.order.orderStatus, trackingInput);
-                                      setEditingOrderId(null);
-                                    }}
-                                    className="p-1 bg-neutral-900 text-white rounded-lg cursor-pointer"
-                                    title="Salvar rastreio"
-                                  >
-                                    <Save className="w-3.5 h-3.5" />
-                                  </button>
                                 </div>
-                              ) : (
-                                <div className="flex items-center gap-1.5 font-mono text-[11px] text-neutral-600">
-                                  <span>{f.order.trackingCode || 'Sem rastreio'}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingOrderId(f.order.id);
-                                      setTrackingInput(f.order.trackingCode || '');
-                                    }}
-                                    className="text-neutral-400 hover:text-neutral-900 cursor-pointer"
-                                    title="Editar código de rastreamento"
-                                  >
-                                    <Edit3 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              )}
+                              </div>
                             </td>
 
-                            {/* Ações Financeiras e Cobrança */}
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="flex flex-col items-end gap-1.5">
-                                {f.order.paymentStatus === 'pending' ? (
+                            {/* COLUNA 5: Status ( Entregue ou Aguardando ) */}
+                            <td className="py-4 px-4">
+                              <div className="inline-flex rounded-xl bg-neutral-100 p-1 border border-neutral-200">
+                                <button
+                                  type="button"
+                                  onClick={() => updateOrderStatus(f.order.id, 'pendente')}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer flex items-center gap-1 ${
+                                    !isEntregue
+                                      ? 'bg-amber-400 text-neutral-950 shadow-xs'
+                                      : 'text-neutral-500 hover:text-neutral-900'
+                                  }`}
+                                  title="Marcar como Aguardando Entrega"
+                                >
+                                  <span>⏳ Aguardando</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateOrderStatus(f.order.id, 'entregue')}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer flex items-center gap-1 ${
+                                    isEntregue
+                                      ? 'bg-emerald-600 text-white shadow-xs'
+                                      : 'text-neutral-500 hover:text-neutral-900'
+                                  }`}
+                                  title="Marcar como Entregue ao cliente"
+                                >
+                                  <span>✅ Entregue</span>
+                                </button>
+                              </div>
+                              <div className="mt-1.5 text-[11px] font-semibold">
+                                {isEntregue ? (
+                                  <span className="text-emerald-700">
+                                    ✅ Produto entregue ao cliente
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-800">
+                                    ⏳ Aguardando entrega (VasconcelosExpress)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            {/* COLUNA 6: AÇÕES */}
+                            <td className="py-4 px-4 text-right">
+                              <div className="flex flex-col items-end gap-2">
+                                {!isFullySettled ? (
                                   <button
                                     type="button"
-                                    onClick={() => updateOrderStatus(f.order.id, 'pago')}
-                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold transition cursor-pointer whitespace-nowrap"
+                                    onClick={() => handleQuickSettleOrder(f)}
+                                    className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 shadow-2xs"
+                                    title="Quitar todo o saldo restante na data de hoje com 1 clique"
                                   >
-                                    Dar Baixa à Vista
-                                  </button>
-                                ) : !isFullySettled && anticipationMode === 'fluxo_mensal' ? (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleUpdatePaidInstallments(
-                                        f.order.id,
-                                        f.totalInstallments,
-                                        f.totalInstallments
-                                      )
-                                    }
-                                    className="px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-indigo-700 text-white text-[11px] font-bold transition cursor-pointer whitespace-nowrap"
-                                  >
-                                    Quitar Parcelas
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    <span>Quitar Tudo ({formatBRL(f.remainingBalance)})</span>
                                   </button>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] font-extrabold text-emerald-800">
                                     <CheckCircle2 className="w-3.5 h-3.5" />
-                                    Conciliado
+                                    Compra Quitada
                                   </span>
                                 )}
 
@@ -2080,37 +2022,25 @@ export const AdminPanel: React.FC = () => {
                                       order: f.order,
                                       settledInstallments: f.settledInstallments,
                                       customTermsNote: f.order.adminPaymentTerms,
-                                      firstDueDate: f.order.adminFirstDueDate
+                                      firstDueDate: f.order.adminFirstDueDate,
+                                      paymentReceipts: f.receipts
                                     })
                                   }
-                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#8B1E3F] hover:bg-neutral-950 text-white text-[10px] font-bold transition cursor-pointer whitespace-nowrap"
-                                  title="Gerar PDF oficial com as condições de pagamento estabelecidas pelo ADM"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8B1E3F] hover:bg-neutral-950 text-white text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap shadow-2xs"
+                                  title="Gerar PDF com valor da compra, datas recebidas e saldo restante"
                                 >
-                                  <FileText className="w-3 h-3" />
+                                  <FileText className="w-3.5 h-3.5" />
                                   <span>Gerar PDF Condições</span>
                                 </button>
 
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    handleSelectBillingCustomer({
-                                      id: `ord-${f.order.id}`,
-                                      name: f.order.customer.name,
-                                      email: f.order.customer.email,
-                                      phone: f.order.customer.phone,
-                                      orderNumber: f.order.orderNumber,
-                                      amount: f.order.total,
-                                      paymentMethod: f.order.paymentMethod,
-                                      pixKey: f.order.pixCopiaECola || 'pix@vasconcelosbeauty.com.br',
-                                      orderStatus: f.order.orderStatus
-                                    });
-                                    setActiveTab('cobranca');
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-100 hover:bg-emerald-50 text-neutral-700 hover:text-emerald-800 border border-neutral-200 text-[10px] font-bold transition cursor-pointer"
-                                  title="Cobrar ou notificar cliente via WhatsApp / E-mail"
+                                  onClick={() => handleSendDirectWhatsAppSummary(f)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-900 hover:text-white border border-emerald-300 text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap"
+                                  title="Enviar resumo de valores e saldo direto para o WhatsApp do cliente"
                                 >
-                                  <MessageCircle className="w-3 h-3 text-emerald-600" />
-                                  <span>Cobrar / Avisar</span>
+                                  <MessageCircle className="w-3.5 h-3.5" />
+                                  <span>Enviar no WhatsApp</span>
                                 </button>
                               </div>
                             </td>
