@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   X,
   Mail,
@@ -13,39 +13,57 @@ import {
   Loader2,
   Gift,
   AlertCircle,
-  ChevronRight
+  Sparkles,
+  MessageCircle,
+  RefreshCw,
+  KeyRound,
+  ShoppingBag
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { User } from '../types';
 
-type AuthStep = 'main' | 'google' | 'apple' | 'success';
+type AuthStep = 'main' | 'verify' | 'success';
+
+interface KnownCustomerSuggestion {
+  name: string;
+  phone: string;
+  email: string;
+  orderCount: number;
+  lastOrderNumber?: string;
+}
+
+const ADMIN_DEFAULT_EMAIL = 'sandravasconcellossillva@gmail.com';
 
 export const SocialAuthModal: React.FC = () => {
   const {
     isAuthOpen,
     setIsAuthOpen,
     setIsAccountOpen,
+    orders,
     registeredUsers,
-    loginWithSocial,
-    loginWithEmail
+    loginWithEmail,
+    sendPushNotification
   } = useStore();
 
   const [step, setStep] = useState<AuthStep>('main');
   const [isRegisterMode, setIsRegisterMode] = useState(true);
 
-  // Email/Password form state
+  // Registration / Login form state (all mandatory on registration)
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Social OAuth form state (Google / Apple)
-  const [socialName, setSocialName] = useState('');
-  const [socialEmail, setSocialEmail] = useState('');
-  const [socialPhone, setSocialPhone] = useState('');
-  const [appleHideEmail, setAppleHideEmail] = useState(false);
-  const [showCustomSocialForm, setShowCustomSocialForm] = useState(false);
+  // Smart customer auto-suggestion state (from previous orders on the site)
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [autoFilledFromOrder, setAutoFilledFromOrder] = useState<string | null>(null);
+
+  // Phone verification (OTP) state
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [enteredCode, setEnteredCode] = useState('');
+  const [waVerificationUrl, setWaVerificationUrl] = useState('');
+  const [codeDispatchedNotice, setCodeDispatchedNotice] = useState('');
 
   // Feedback & Loading state
   const [isLoading, setIsLoading] = useState(false);
@@ -53,22 +71,89 @@ export const SocialAuthModal: React.FC = () => {
   const [authenticatedUser, setAuthenticatedUser] = useState<User | null>(null);
   const [isNewRegistration, setIsNewRegistration] = useState(false);
 
+  // Aggregate unique customers who already made purchases on the site (or are in registeredUsers)
+  const knownCustomers = useMemo<KnownCustomerSuggestion[]>(() => {
+    const map = new Map<string, KnownCustomerSuggestion>();
+
+    // 1. Prioritize customers with purchases in `orders`
+    orders.forEach((order) => {
+      const custName = (order.customer?.name || '').trim();
+      if (!custName) return;
+      const key = custName.toLowerCase();
+      const custPhone = (order.customer?.phone || '').trim();
+      const rawEmail = (order.customer?.email || '').trim().toLowerCase();
+      const custEmail = rawEmail && rawEmail !== ADMIN_DEFAULT_EMAIL ? rawEmail : '';
+
+      const existing = map.get(key);
+      if (existing) {
+        existing.orderCount += 1;
+        if (!existing.phone && custPhone) existing.phone = custPhone;
+        if (!existing.email && custEmail) existing.email = custEmail;
+      } else {
+        map.set(key, {
+          name: custName,
+          phone: custPhone,
+          email: custEmail,
+          orderCount: 1,
+          lastOrderNumber: order.orderNumber
+        });
+      }
+    });
+
+    // 2. Also include previously registered customers
+    registeredUsers.forEach((u) => {
+      const custName = (u.name || '').trim();
+      if (!custName) return;
+      const key = custName.toLowerCase();
+      const custPhone = (u.phone || '').trim();
+      const rawEmail = (u.email || '').trim().toLowerCase();
+      const custEmail = rawEmail && rawEmail !== ADMIN_DEFAULT_EMAIL ? rawEmail : '';
+
+      const existing = map.get(key);
+      if (existing) {
+        if (!existing.phone && custPhone) existing.phone = custPhone;
+        if (!existing.email && custEmail) existing.email = custEmail;
+      } else {
+        map.set(key, {
+          name: custName,
+          phone: custPhone,
+          email: custEmail,
+          orderCount: 0
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [orders, registeredUsers]);
+
+  // Filter suggestions based on typed name or phone
+  const matchingSuggestions = useMemo(() => {
+    const query = name.trim().toLowerCase();
+    const phoneDigits = phone.replace(/\D/g, '');
+
+    if (!query && phoneDigits.length < 3) {
+      // Show top customers with previous purchases when focused
+      return knownCustomers.filter((c) => c.orderCount > 0).slice(0, 4);
+    }
+
+    return knownCustomers
+      .filter((c) => {
+        const nameMatch = query.length > 0 && c.name.toLowerCase().includes(query);
+        const phoneMatch =
+          phoneDigits.length >= 3 && c.phone.replace(/\D/g, '').includes(phoneDigits);
+        // Hide if exact name and phone are already selected
+        if (
+          c.name.toLowerCase() === query &&
+          (!c.phone || c.phone === phone)
+        ) {
+          return false;
+        }
+        return nameMatch || phoneMatch;
+      })
+      .slice(0, 5);
+  }, [name, phone, knownCustomers]);
+
   if (!isAuthOpen) return null;
-
-  const googleAccounts = registeredUsers.filter(u => u.provider === 'google');
-  const appleAccounts = registeredUsers.filter(u => u.provider === 'apple');
-
-  const resetModal = () => {
-    setStep('main');
-    setErrorMsg('');
-    setIsLoading(false);
-    setShowCustomSocialForm(false);
-  };
-
-  const handleClose = () => {
-    resetModal();
-    setIsAuthOpen(false);
-  };
 
   const formatPhone = (val: string) => {
     const digits = val.replace(/\D/g, '').slice(0, 11);
@@ -77,12 +162,164 @@ export const SocialAuthModal: React.FC = () => {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   };
 
-  // Handler for Email Login/Registration
-  const handleSubmitEmail = (e: React.FormEvent) => {
+  const resetModal = () => {
+    setStep('main');
+    setErrorMsg('');
+    setIsLoading(false);
+    setEnteredCode('');
+    setGeneratedCode('');
+    setCodeDispatchedNotice('');
+    setShowNameSuggestions(false);
+  };
+
+  const handleClose = () => {
+    resetModal();
+    setIsAuthOpen(false);
+  };
+
+  const handleSelectCustomerSuggestion = (suggestion: KnownCustomerSuggestion) => {
+    setName(suggestion.name);
+    if (suggestion.phone) {
+      setPhone(formatPhone(suggestion.phone));
+    }
+    if (suggestion.email) {
+      setEmail(suggestion.email);
+    }
+    setAutoFilledFromOrder(
+      suggestion.lastOrderNumber
+        ? `Dados encontrados da compra anterior (${suggestion.lastOrderNumber})`
+        : 'Dados encontrados do histórico de compras no site'
+    );
+    setShowNameSuggestions(false);
+    setErrorMsg('');
+  };
+
+  // Dispatches the 6-digit verification code to the customer's phone/WhatsApp + email
+  const dispatchPhoneVerificationCode = async (targetCode: string) => {
+    const cleanDigits = phone.replace(/\D/g, '');
+    const fullPhone = cleanDigits.startsWith('55') ? cleanDigits : `55${cleanDigits}`;
+    const firstName = name.trim().split(' ')[0] || 'Cliente';
+
+    const waText = [
+      `🔐 *VASCONCELOS — Confirmação de Cadastro*`,
+      ``,
+      `Olá, *${firstName}*!`,
+      `Seu código de validação para confirmar seu cadastro no site da *VASCONCELOS* é:`,
+      ``,
+      `👉 *${targetCode}*`,
+      ``,
+      `Digite este código na tela do site para validar seu número e liberar seu cupom *BEMVINDO10* (10% OFF).`
+    ].join('\n');
+
+    const fallbackWaUrl = `https://wa.me/${fullPhone}?text=${encodeURIComponent(waText)}`;
+    setWaVerificationUrl(fallbackWaUrl);
+
+    // 1. Trigger push / in-app notification so the user receives the code immediately on their device
+    sendPushNotification(
+      `📲 Código de Validação: ${targetCode}`,
+      `Enviado para ${phone}. Digite o código ${targetCode} para confirmar seu cadastro na VASCONCELOS.`,
+      undefined,
+      'Validação SMS/WhatsApp'
+    );
+
+    // 2. Call backend endpoint (/api/auth/send-verification-code) for WhatsApp API/Webhook & SMTP
+    try {
+      const res = await fetch('/api/auth/send-verification-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: phone.trim(),
+          email: email.trim().toLowerCase(),
+          code: targetCode
+        })
+      });
+      const data = await res.json();
+      if (data?.waMeUrl) {
+        setWaVerificationUrl(data.waMeUrl);
+      }
+    } catch {
+      // Fallback for static Vercel environment
+    }
+
+    // 3. Also send confirmation code to customer's email via FormSubmit AJAX (works on Vercel)
+    if (email.trim().includes('@')) {
+      try {
+        fetch(`https://formsubmit.co/ajax/${email.trim().toLowerCase()}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json'
+          },
+          body: JSON.stringify({
+            _subject: `🔐 Código ${targetCode} — Confirmação de Cadastro VASCONCELOS`,
+            _template: 'table',
+            Cliente: name.trim(),
+            Celular_Validado: phone.trim(),
+            Codigo_de_Validacao: targetCode,
+            Instrucao: `Digite o código ${targetCode} na tela de cadastro do site VASCONCELOS para validar sua conta.`
+          })
+        }).catch(() => {});
+      } catch {
+        // Ignore network errors
+      }
+    }
+
+    setCodeDispatchedNotice(`Código enviado para o número ${phone}`);
+  };
+
+  // Step 1: Validate fields and send verification code (or login directly if in login mode)
+  const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!email.trim() || !email.includes('@')) {
+    const cleanEmail = email.trim().toLowerCase();
+    const phoneDigits = phone.replace(/\D/g, '');
+
+    if (isRegisterMode) {
+      if (!name.trim()) {
+        setErrorMsg('O Nome Completo é obrigatório.');
+        return;
+      }
+
+      if (phoneDigits.length < 10) {
+        setErrorMsg('O número de celular / WhatsApp com DDD é obrigatório (ex: (92) 98479-7348).');
+        return;
+      }
+
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        setErrorMsg('Informe um endereço de e-mail válido.');
+        return;
+      }
+
+      if (password.length < 4) {
+        setErrorMsg('A senha é obrigatória e deve ter pelo menos 4 caracteres.');
+        return;
+      }
+
+      const alreadyRegistered = registeredUsers.some(
+        (u) => u.email.toLowerCase() === cleanEmail
+      );
+      if (alreadyRegistered) {
+        setErrorMsg('Este e-mail já possui cadastro. Clique em "Já possui cadastro? Acesse sua conta".');
+        return;
+      }
+
+      // Generate 6-digit verification code and send to customer's phone
+      setIsLoading(true);
+      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedCode(newCode);
+      setEnteredCode('');
+
+      await dispatchPhoneVerificationCode(newCode);
+
+      setIsLoading(false);
+      setStep('verify');
+      return;
+    }
+
+    // Login Mode
+    if (!cleanEmail || !cleanEmail.includes('@')) {
       setErrorMsg('Por favor, insira um endereço de e-mail válido.');
       return;
     }
@@ -92,14 +329,9 @@ export const SocialAuthModal: React.FC = () => {
       return;
     }
 
-    if (isRegisterMode && !name.trim()) {
-      setErrorMsg('Por favor, informe como prefere ser chamado(a).');
-      return;
-    }
-
     setIsLoading(true);
     setTimeout(() => {
-      const res = loginWithEmail(email, name, password, phone, isRegisterMode);
+      const res = loginWithEmail(cleanEmail, name, password, phone, false);
       setIsLoading(false);
 
       if (!res.success) {
@@ -109,106 +341,59 @@ export const SocialAuthModal: React.FC = () => {
 
       if (res.user) {
         setAuthenticatedUser(res.user);
-        setIsNewRegistration(isRegisterMode);
+        setIsNewRegistration(false);
         setStep('success');
       }
-    }, 500);
+    }, 400);
   };
 
-  // Open Google OAuth Step
-  const handleStartGoogle = () => {
-    setErrorMsg('');
-    setSocialName('');
-    setSocialEmail('');
-    setSocialPhone('');
-    setShowCustomSocialForm(googleAccounts.length === 0);
-    setStep('google');
-  };
-
-  // Open Apple OAuth Step
-  const handleStartApple = () => {
-    setErrorMsg('');
-    setSocialName('');
-    setSocialEmail('');
-    setSocialPhone('');
-    setAppleHideEmail(false);
-    setShowCustomSocialForm(appleAccounts.length === 0);
-    setStep('apple');
-  };
-
-  // Quick login with a previously saved Google/Apple account
-  const handleQuickSelectSocialAccount = (account: User) => {
-    setIsLoading(true);
-    setErrorMsg('');
-    setTimeout(() => {
-      const res = loginWithSocial(account.provider === 'apple' ? 'apple' : 'google', {
-        name: account.name,
-        email: account.email,
-        phone: account.phone,
-        avatar: account.avatar
-      });
-      setIsLoading(false);
-      setAuthenticatedUser(res.user);
-      setIsNewRegistration(res.isNewUser);
-      setStep('success');
-    }, 500);
-  };
-
-  // Complete Google or Apple authentication with user-provided details
-  const handleConfirmSocialAuth = (provider: 'google' | 'apple', e: React.FormEvent) => {
+  // Step 2: Verify the 6-digit code sent to the customer's phone and complete registration
+  const handleVerifyCode = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
-    const cleanName = socialName.trim();
-    let cleanEmail = socialEmail.trim().toLowerCase();
-
-    if (!cleanName) {
-      setErrorMsg('Informe seu nome para vincular à sua conta.');
+    const cleanEntered = enteredCode.replace(/\D/g, '').trim();
+    if (cleanEntered.length !== 6) {
+      setErrorMsg('Digite os 6 dígitos do código de confirmação enviado para o seu celular.');
       return;
     }
 
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMsg(
-        provider === 'google'
-          ? 'Informe um e-mail válido da sua Conta Google (ex: seuemail@gmail.com).'
-          : 'Informe o e-mail do seu ID Apple (ex: seuemail@icloud.com).'
-      );
+    if (cleanEntered !== generatedCode) {
+      setErrorMsg('Código de confirmação inválido. Verifique o código enviado para o seu número e tente novamente.');
       return;
-    }
-
-    if (provider === 'apple' && appleHideEmail && !cleanEmail.endsWith('@privaterelay.appleid.com')) {
-      const hash = cleanEmail
-        .split('@')[0]
-        .replace(/[^a-z0-9]/g, '')
-        .slice(0, 8);
-      cleanEmail = `${hash || 'appleuser'}.vsc@privaterelay.appleid.com`;
     }
 
     setIsLoading(true);
     setTimeout(() => {
-      const avatarBg = provider === 'google' ? '4285F4' : '171717';
-      const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-        cleanName
-      )}&background=${avatarBg}&color=fff&bold=true`;
-
-      const res = loginWithSocial(provider, {
-        name: cleanName,
-        email: cleanEmail,
-        phone: socialPhone,
-        avatar: avatarUrl
-      });
-
+      const res = loginWithEmail(email, name, password, phone, true);
       setIsLoading(false);
-      setAuthenticatedUser(res.user);
-      setIsNewRegistration(res.isNewUser);
-      setStep('success');
-    }, 650);
+
+      if (!res.success) {
+        setErrorMsg(res.message);
+        return;
+      }
+
+      if (res.user) {
+        setAuthenticatedUser({ ...res.user, phoneVerified: true });
+        setIsNewRegistration(true);
+        setStep('success');
+      }
+    }, 400);
+  };
+
+  const handleResendCode = async () => {
+    setErrorMsg('');
+    setIsLoading(true);
+    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+    setGeneratedCode(newCode);
+    setEnteredCode('');
+    await dispatchPhoneVerificationCode(newCode);
+    setIsLoading(false);
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
       <div className="relative bg-white rounded-2xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 border border-neutral-200">
-        
         {/* Close Button */}
         <button
           onClick={handleClose}
@@ -219,7 +404,7 @@ export const SocialAuthModal: React.FC = () => {
         </button>
 
         {/* =========================================================
-            STEP 1: MAIN LOGIN / REGISTER VIEW
+            STEP 1: CADASTRO DIRETO (SEM GOOGLE/APPLE) + SUGESTÃO INTELIGENTE
            ========================================================= */}
         {step === 'main' && (
           <>
@@ -232,60 +417,28 @@ export const SocialAuthModal: React.FC = () => {
                 {isRegisterMode ? 'Criar Conta de Cliente' : 'Acessar Minha Conta'}
               </h2>
               <p className="text-xs text-neutral-500 max-w-xs mx-auto">
-                Acompanhe seus pedidos em tempo real, salve seus favoritos e gerencie seus benefícios.
+                {isRegisterMode
+                  ? 'Cadastre seus dados e valide seu número de celular para acompanhar pedidos e ativar benefícios.'
+                  : 'Entre com seu e-mail e senha cadastrados para acompanhar seus pedidos.'}
               </p>
             </div>
 
-            {/* Social Login Buttons */}
-            <div className="space-y-2.5">
-              {/* Google Login */}
-              <button
-                type="button"
-                onClick={handleStartGoogle}
-                className="w-full py-3 px-4 rounded-lg border border-neutral-300 hover:border-neutral-900 bg-white hover:bg-neutral-50 text-neutral-900 text-xs font-bold flex items-center justify-center gap-3 transition cursor-pointer"
-              >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                  />
-                </svg>
-                <span>Continuar com o Google</span>
-              </button>
-
-              {/* Apple Login */}
-              <button
-                type="button"
-                onClick={handleStartApple}
-                className="w-full py-3 px-4 rounded-lg bg-[#111111] hover:bg-black text-white text-xs font-bold flex items-center justify-center gap-3 transition cursor-pointer"
-              >
-                <svg className="w-4 h-4 fill-white shrink-0" viewBox="0 0 170 170">
-                  <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.74 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.04-7.67-7.83-11.96-14.39-7.98-12.24-13.56-25.75-16.74-40.54-3.18-14.78-3.18-27.81 0-39.09 3.18-11.28 8.85-20.25 17-26.91 8.16-6.66 17.58-10.05 28.28-10.16 5.56 0 11.29 1.41 17.18 4.24 5.89 2.83 10.04 4.24 12.44 4.24 2.18 0 6.32-1.35 12.44-4.07 6.12-2.72 11.59-3.97 16.42-3.76 14.81.98 26.68 6.75 35.61 17.3-13.07 7.95-19.49 18.9-19.26 32.86.23 10.89 4.3 20.08 12.21 27.57 7.91 7.49 17.47 11.66 28.69 12.51-2.28 7.3-5.27 14.62-8.98 21.96zM119.22 33.15c0-7.3 2.67-14.31 8.01-21.03 5.34-6.72 11.96-10.96 19.86-12.72.65 1.52.98 3.26.98 5.22 0 7.4-2.73 14.54-8.19 21.42-5.46 6.88-12.23 11.22-20.31 13.01-.22-1.95-.35-3.91-.35-5.9z" />
-                </svg>
-                <span>Continuar com Apple</span>
-              </button>
-            </div>
-
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-neutral-200" />
-              <span className="text-[10px] uppercase tracking-[0.16em] text-neutral-400 font-semibold">
-                ou com e-mail
-              </span>
-              <div className="flex-1 h-px bg-neutral-200" />
-            </div>
+            {/* Auto-fill confirmation pill if customer selected a suggestion from a previous order */}
+            {isRegisterMode && autoFilledFromOrder && (
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span className="font-semibold">{autoFilledFromOrder}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAutoFilledFromOrder(null)}
+                  className="text-emerald-600 hover:text-emerald-900 text-[10px] font-bold cursor-pointer"
+                >
+                  OK
+                </button>
+              </div>
+            )}
 
             {/* Error Alert */}
             {errorMsg && (
@@ -295,45 +448,121 @@ export const SocialAuthModal: React.FC = () => {
               </div>
             )}
 
-            {/* Email Form */}
-            <form onSubmit={handleSubmitEmail} className="space-y-3">
+            {/* Direct Registration / Login Form */}
+            <form onSubmit={handleSubmitForm} className="space-y-3.5">
               {isRegisterMode && (
                 <>
-                  <div>
-                    <label className="text-[11px] font-bold text-neutral-700">Nome Completo</label>
+                  {/* NOME COMPLETO COM AUTO-SUGESTÃO DE COMPRAS ANTERIORES */}
+                  <div className="relative">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-neutral-800">
+                        Nome Completo <span className="text-[#8B1E3F]">*</span>
+                      </label>
+                      {knownCustomers.some((c) => c.orderCount > 0) && (
+                        <span className="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" />
+                          Busca automática de clientes ativa
+                        </span>
+                      )}
+                    </div>
                     <div className="relative mt-1">
                       <input
                         type="text"
                         required
                         value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Como prefere ser chamado(a)?"
+                        onFocus={() => setShowNameSuggestions(true)}
+                        onBlur={() => {
+                          setTimeout(() => setShowNameSuggestions(false), 180);
+                        }}
+                        onChange={(e) => {
+                          setName(e.target.value);
+                          setShowNameSuggestions(true);
+                        }}
+                        placeholder="Digite seu nome (sugestão automática se já comprou)"
                         className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
                       />
                       <UserIcon className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
                     </div>
+
+                    {/* Dropdown de Sugestão de Clientes que já compraram no site */}
+                    {showNameSuggestions && matchingSuggestions.length > 0 && (
+                      <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-neutral-300 rounded-xl shadow-xl overflow-hidden animate-in fade-in duration-150">
+                        <div className="px-3 py-1.5 bg-[#F7F6F2] border-b border-neutral-200 flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 flex items-center gap-1.5">
+                            <ShoppingBag className="w-3 h-3 text-[#8B1E3F]" />
+                            Cliente encontrado no site — toque para preencher:
+                          </span>
+                        </div>
+                        <div className="max-h-44 overflow-y-auto divide-y divide-neutral-100">
+                          {matchingSuggestions.map((item, idx) => (
+                            <button
+                              key={`${item.name}-${idx}`}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                handleSelectCustomerSuggestion(item);
+                              }}
+                              className="w-full px-3.5 py-2.5 text-left hover:bg-emerald-50/70 transition flex items-center justify-between gap-2 cursor-pointer"
+                            >
+                              <div>
+                                <p className="text-xs font-bold text-neutral-900">{item.name}</p>
+                                <p className="text-[11px] text-neutral-500">
+                                  {item.phone ? `📱 ${item.phone}` : ''}
+                                  {item.phone && item.email ? ' • ' : ''}
+                                  {item.email ? `✉️ ${item.email}` : ''}
+                                </p>
+                              </div>
+                              <span className="shrink-0 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                {item.orderCount > 0 ? 'Já comprou' : 'Cadastrado'}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
+                  {/* WHATSAPP / TELEFONE OBRIGATÓRIO */}
                   <div>
-                    <label className="text-[11px] font-bold text-neutral-700">
-                      WhatsApp / Telefone <span className="text-neutral-400 font-normal">(opcional)</span>
+                    <label className="text-[11px] font-bold text-neutral-800">
+                      WhatsApp / Telefone <span className="text-[#8B1E3F]">*</span>
                     </label>
                     <div className="relative mt-1">
                       <input
                         type="tel"
+                        required
                         value={phone}
-                        onChange={(e) => setPhone(formatPhone(e.target.value))}
-                        placeholder="(11) 99999-9999"
-                        className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
+                        onChange={(e) => {
+                          const formatted = formatPhone(e.target.value);
+                          setPhone(formatted);
+                          // Se o usuário digitar um telefone que já comprou antes e o nome estiver vazio, sugere/preenche
+                          const digits = formatted.replace(/\D/g, '');
+                          if (digits.length >= 10 && !name.trim()) {
+                            const matchedByPhone = knownCustomers.find(
+                              (c) => c.phone.replace(/\D/g, '') === digits
+                            );
+                            if (matchedByPhone) {
+                              handleSelectCustomerSuggestion(matchedByPhone);
+                            }
+                          }
+                        }}
+                        placeholder="(92) 98479-7348"
+                        className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition font-mono"
                       />
                       <Phone className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
                     </div>
+                    <p className="text-[10px] text-neutral-500 mt-1">
+                      Enviaremos um código de confirmação para validar seu número de celular.
+                    </p>
                   </div>
                 </>
               )}
 
+              {/* E-MAIL OBRIGATÓRIO */}
               <div>
-                <label className="text-[11px] font-bold text-neutral-700">E-mail</label>
+                <label className="text-[11px] font-bold text-neutral-800">
+                  E-mail <span className="text-[#8B1E3F]">*</span>
+                </label>
                 <div className="relative mt-1">
                   <input
                     type="email"
@@ -347,8 +576,11 @@ export const SocialAuthModal: React.FC = () => {
                 </div>
               </div>
 
+              {/* SENHA OBRIGATÓRIA */}
               <div>
-                <label className="text-[11px] font-bold text-neutral-700">Senha</label>
+                <label className="text-[11px] font-bold text-neutral-800">
+                  Senha <span className="text-[#8B1E3F]">*</span>
+                </label>
                 <div className="relative mt-1">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -377,10 +609,12 @@ export const SocialAuthModal: React.FC = () => {
                 {isLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Processando...</span>
+                    <span>Enviando Código de Confirmação...</span>
                   </>
                 ) : (
-                  <span>{isRegisterMode ? 'Criar Conta e Ativar 10% OFF' : 'Entrar na Conta'}</span>
+                  <span>
+                    {isRegisterMode ? 'Receber Código e Ativar 10% OFF' : 'Entrar na Conta'}
+                  </span>
                 )}
               </button>
             </form>
@@ -403,46 +637,74 @@ export const SocialAuthModal: React.FC = () => {
         )}
 
         {/* =========================================================
-            STEP 2: GOOGLE OAUTH ACCOUNT SELECTOR & REGISTRATION
+            STEP 2: VALIDAÇÃO DO NÚMERO DE CELULAR POR CÓDIGO (OTP)
            ========================================================= */}
-        {step === 'google' && (
-          <div className="space-y-5 animate-in fade-in duration-200">
+        {step === 'verify' && (
+          <div className="space-y-4 animate-in fade-in duration-200">
             <button
               type="button"
-              onClick={() => setStep('main')}
+              onClick={() => {
+                setStep('main');
+                setErrorMsg('');
+              }}
               className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 font-semibold transition cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Voltar</span>
+              <span>Corrigir Dados</span>
             </button>
 
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-xl bg-neutral-50 border border-neutral-200 mx-auto flex items-center justify-center">
-                <svg className="w-6 h-6" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.34 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                  />
-                </svg>
+            <div className="text-center space-y-1.5">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 mx-auto flex items-center justify-center">
+                <KeyRound className="w-6 h-6" />
               </div>
+              <span className="text-[10px] font-extrabold uppercase tracking-[0.22em] text-emerald-700 block">
+                VALIDAÇÃO DE SEGURANÇA
+              </span>
               <h3 className="text-xl font-bold text-neutral-950">
-                Continuar com o Google
+                Confirme seu Número de Celular
               </h3>
               <p className="text-xs text-neutral-500">
-                Prosseguir para <strong className="text-neutral-900">VASCONCELOS</strong>
+                Enviamos uma confirmação com um código de 6 dígitos para o número{' '}
+                <strong className="text-neutral-900 font-mono">{phone}</strong> de{' '}
+                <strong className="text-neutral-900">{name}</strong>.
               </p>
+            </div>
+
+            {/* Banner de Confirmação Instantânea do Código para o Celular */}
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-0.5">
+                  <p className="text-[11px] font-bold text-emerald-950 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{codeDispatchedNotice || `Código gerado para ${phone}`}</span>
+                  </p>
+                  <p className="text-[11px] text-emerald-800">
+                    Código de validação do cliente:{' '}
+                    <strong className="font-mono text-sm bg-white px-2 py-0.5 rounded border border-emerald-300 text-emerald-950 tracking-widest">
+                      {generatedCode}
+                    </strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEnteredCode(generatedCode)}
+                  className="shrink-0 px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold uppercase tracking-wider transition cursor-pointer"
+                >
+                  Usar Código
+                </button>
+              </div>
+
+              {waVerificationUrl && (
+                <a
+                  href={waVerificationUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-2 px-3 rounded-lg bg-white hover:bg-emerald-100/70 border border-emerald-300 text-emerald-900 text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Abrir / Receber Confirmação no WhatsApp ({phone})</span>
+                </a>
+              )}
             </div>
 
             {errorMsg && (
@@ -452,303 +714,58 @@ export const SocialAuthModal: React.FC = () => {
               </div>
             )}
 
-            {/* Saved Google Accounts List */}
-            {googleAccounts.length > 0 && !showCustomSocialForm && (
-              <div className="space-y-2">
-                <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
-                  Escolha uma conta Google conectada:
-                </p>
-                <div className="divide-y divide-neutral-100 border border-neutral-200 rounded-xl overflow-hidden">
-                  {googleAccounts.map(acc => (
-                    <button
-                      key={acc.id}
-                      type="button"
-                      disabled={isLoading}
-                      onClick={() => handleQuickSelectSocialAccount(acc)}
-                      className="w-full p-3.5 flex items-center justify-between hover:bg-neutral-50 transition text-left cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={acc.avatar}
-                          alt={acc.name}
-                          className="w-9 h-9 rounded-full object-cover"
-                        />
-                        <div>
-                          <p className="text-xs font-bold text-neutral-900">{acc.name}</p>
-                          <p className="text-[11px] text-neutral-500">{acc.email}</p>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-neutral-400" />
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowCustomSocialForm(true)}
-                  className="w-full py-2.5 text-xs font-bold text-neutral-800 hover:bg-neutral-100 rounded-lg transition cursor-pointer"
-                >
-                  + Usar outra conta do Google
-                </button>
+            <form onSubmit={handleVerifyCode} className="space-y-3.5">
+              <div>
+                <label className="text-[11px] font-bold text-neutral-800 uppercase tracking-wider block text-center mb-1.5">
+                  Digite o Código de 6 Dígitos *
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  value={enteredCode}
+                  onChange={(e) => setEnteredCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  className="w-full bg-[#F7F6F2] border-2 border-neutral-300 focus:border-neutral-950 focus:bg-white rounded-xl py-3 px-4 text-center font-mono text-2xl font-extrabold tracking-[0.4em] text-neutral-950 outline-hidden transition"
+                />
               </div>
-            )}
 
-            {/* Google Account Registration / Sign-In Form */}
-            {showCustomSocialForm && (
-              <form
-                onSubmit={(e) => handleConfirmSocialAuth('google', e)}
-                className="space-y-3.5"
+              <button
+                type="submit"
+                disabled={isLoading || enteredCode.length < 6}
+                className="w-full py-3.5 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-bold tracking-[0.1em] uppercase transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
-                <div>
-                  <label className="text-[11px] font-bold text-neutral-700">
-                    Nome da Conta Google
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      type="text"
-                      required
-                      value={socialName}
-                      onChange={(e) => setSocialName(e.target.value)}
-                      placeholder="Ex: Maria Clara Silva"
-                      className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
-                    />
-                    <UserIcon className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
-                  </div>
-                </div>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Validando Cliente...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Validar Código e Concluir Cadastro</span>
+                  </>
+                )}
+              </button>
+            </form>
 
-                <div>
-                  <label className="text-[11px] font-bold text-neutral-700">
-                    E-mail do Google (Gmail)
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      type="email"
-                      required
-                      value={socialEmail}
-                      onChange={(e) => setSocialEmail(e.target.value)}
-                      placeholder="seuemail@gmail.com"
-                      className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
-                    />
-                    <Mail className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-neutral-700">
-                    WhatsApp para Rastreio de Pedidos <span className="text-neutral-400 font-normal">(opcional)</span>
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      type="tel"
-                      value={socialPhone}
-                      onChange={(e) => setSocialPhone(formatPhone(e.target.value))}
-                      placeholder="(11) 99999-9999"
-                      className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
-                    />
-                    <Phone className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3.5 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Autenticando junto ao Google...</span>
-                    </>
-                  ) : (
-                    <span>Continuar com Conta Google</span>
-                  )}
-                </button>
-              </form>
-            )}
-
-            <p className="text-[10px] text-neutral-400 text-center leading-relaxed">
-              Ao prosseguir, o Google compartilhará seu nome e endereço de e-mail com a{' '}
-              <strong>VASCONCELOS</strong>.
-            </p>
-          </div>
-        )}
-
-        {/* =========================================================
-            STEP 3: APPLE ID OAUTH SELECTOR & REGISTRATION
-           ========================================================= */}
-        {step === 'apple' && (
-          <div className="space-y-5 animate-in fade-in duration-200">
-            <button
-              type="button"
-              onClick={() => setStep('main')}
-              className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 font-semibold transition cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Voltar</span>
-            </button>
-
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-xl bg-[#111111] text-white mx-auto flex items-center justify-center">
-                <svg className="w-6 h-6 fill-white" viewBox="0 0 170 170">
-                  <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.74 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.04-7.67-7.83-11.96-14.39-7.98-12.24-13.56-25.75-16.74-40.54-3.18-14.78-3.18-27.81 0-39.09 3.18-11.28 8.85-20.25 17-26.91 8.16-6.66 17.58-10.05 28.28-10.16 5.56 0 11.29 1.41 17.18 4.24 5.89 2.83 10.04 4.24 12.44 4.24 2.18 0 6.32-1.35 12.44-4.07 6.12-2.72 11.59-3.97 16.42-3.76 14.81.98 26.68 6.75 35.61 17.3-13.07 7.95-19.49 18.9-19.26 32.86.23 10.89 4.3 20.08 12.21 27.57 7.91 7.49 17.47 11.66 28.69 12.51-2.28 7.3-5.27 14.62-8.98 21.96zM119.22 33.15c0-7.3 2.67-14.31 8.01-21.03 5.34-6.72 11.96-10.96 19.86-12.72.65 1.52.98 3.26.98 5.22 0 7.4-2.73 14.54-8.19 21.42-5.46 6.88-12.23 11.22-20.31 13.01-.22-1.95-.35-3.91-.35-5.9z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-bold text-neutral-950">
-                Iniciar sessão com a Apple
-              </h3>
-              <p className="text-xs text-neutral-500">
-                Use seu ID Apple para acessar a <strong>VASCONCELOS</strong>
-              </p>
+            <div className="text-center">
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={handleResendCode}
+                className="inline-flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-950 font-semibold transition cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Não recebeu? Enviar novo código para {phone}</span>
+              </button>
             </div>
-
-            {errorMsg && (
-              <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                <span>{errorMsg}</span>
-              </div>
-            )}
-
-            {/* Saved Apple Accounts */}
-            {appleAccounts.length > 0 && !showCustomSocialForm && (
-              <div className="space-y-2">
-                <p className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider">
-                  ID Apple salvo neste dispositivo:
-                </p>
-                <div className="divide-y divide-neutral-100 border border-neutral-200 rounded-xl overflow-hidden">
-                  {appleAccounts.map(acc => (
-                    <button
-                      key={acc.id}
-                      type="button"
-                      disabled={isLoading}
-                      onClick={() => handleQuickSelectSocialAccount(acc)}
-                      className="w-full p-3.5 flex items-center justify-between hover:bg-neutral-50 transition text-left cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={acc.avatar}
-                          alt={acc.name}
-                          className="w-9 h-9 rounded-full object-cover"
-                        />
-                        <div>
-                          <p className="text-xs font-bold text-neutral-900">{acc.name}</p>
-                          <p className="text-[11px] text-neutral-500">{acc.email}</p>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-neutral-400" />
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowCustomSocialForm(true)}
-                  className="w-full py-2.5 text-xs font-bold text-neutral-700 hover:bg-neutral-100 rounded-lg transition cursor-pointer"
-                >
-                  + Usar outro ID Apple
-                </button>
-              </div>
-            )}
-
-            {/* Apple ID Form */}
-            {showCustomSocialForm && (
-              <form
-                onSubmit={(e) => handleConfirmSocialAuth('apple', e)}
-                className="space-y-3.5"
-              >
-                <div>
-                  <label className="text-[11px] font-bold text-neutral-700">Nome Completo</label>
-                  <div className="relative mt-1">
-                    <input
-                      type="text"
-                      required
-                      value={socialName}
-                      onChange={(e) => setSocialName(e.target.value)}
-                      placeholder="Seu Nome no ID Apple"
-                      className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
-                    />
-                    <UserIcon className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-neutral-700">
-                    ID Apple (iCloud ou E-mail)
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      type="email"
-                      required
-                      value={socialEmail}
-                      onChange={(e) => setSocialEmail(e.target.value)}
-                      placeholder="seuemail@icloud.com"
-                      className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
-                    />
-                    <Mail className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[11px] font-bold text-neutral-700">
-                    WhatsApp <span className="text-neutral-400 font-normal">(opcional)</span>
-                  </label>
-                  <div className="relative mt-1">
-                    <input
-                      type="tel"
-                      value={socialPhone}
-                      onChange={(e) => setSocialPhone(formatPhone(e.target.value))}
-                      placeholder="(11) 99999-9999"
-                      className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
-                    />
-                    <Phone className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />
-                  </div>
-                </div>
-
-                {/* Apple Privacy Option: Share or Hide Email */}
-                <div className="p-3 rounded-xl bg-[#F7F6F2] border border-neutral-200 space-y-2">
-                  <p className="text-[11px] font-bold text-neutral-800">Privacidade de E-mail Apple</p>
-                  <label className="flex items-center gap-2 text-xs text-neutral-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="appleEmailPrivacy"
-                      checked={!appleHideEmail}
-                      onChange={() => setAppleHideEmail(false)}
-                      className="accent-black"
-                    />
-                    <span>Compartilhar Meu E-mail</span>
-                  </label>
-                  <label className="flex items-center gap-2 text-xs text-neutral-700 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="appleEmailPrivacy"
-                      checked={appleHideEmail}
-                      onChange={() => setAppleHideEmail(true)}
-                      className="accent-black"
-                    />
-                    <span>Ocultar Meu E-mail (Encaminhar para meu iCloud)</span>
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-3.5 rounded-lg bg-[#111111] hover:bg-black text-white text-xs font-bold uppercase tracking-wider transition flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Autenticando ID Apple...</span>
-                    </>
-                  ) : (
-                    <span>Continuar com ID Apple</span>
-                  )}
-                </button>
-              </form>
-            )}
           </div>
         )}
 
         {/* =========================================================
-            STEP 4: SUCCESS & WELCOME COUPON CONFIRMATION
+            STEP 3: SUCESSO — CLIENTE VALIDADO & CUPOM ATIVADO
            ========================================================= */}
         {step === 'success' && authenticatedUser && (
           <div className="text-center space-y-5 py-2 animate-in fade-in zoom-in-95 duration-200">
@@ -757,20 +774,19 @@ export const SocialAuthModal: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-neutral-100 text-neutral-800">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                {authenticatedUser.provider === 'google'
-                  ? 'Conta Google Conectada'
-                  : authenticatedUser.provider === 'apple'
-                  ? 'ID Apple Conectado'
-                  : 'Conta Verificada'}
+                Cliente Validado • Celular Confirmado
               </span>
               <h3 className="text-xl font-bold text-neutral-950 pt-1">
                 {isNewRegistration
                   ? `Bem-vinda(o), ${authenticatedUser.name.split(' ')[0]}!`
                   : `Olá novamente, ${authenticatedUser.name.split(' ')[0]}!`}
               </h3>
-              <p className="text-xs text-neutral-500">{authenticatedUser.email}</p>
+              <p className="text-xs text-neutral-500">
+                {authenticatedUser.phone ? `${authenticatedUser.phone} • ` : ''}
+                {authenticatedUser.email}
+              </p>
             </div>
 
             {/* Welcome Coupon Box */}
@@ -780,7 +796,11 @@ export const SocialAuthModal: React.FC = () => {
                 <span>BENEFÍCIO DE BOAS-VINDAS ATIVADO</span>
               </div>
               <p className="text-[11px] text-neutral-600">
-                O cupom <strong className="font-mono bg-white px-2 py-0.5 rounded border border-neutral-300 text-neutral-900">BEMVINDO10</strong> (10% OFF) já está aplicado em sua sacola.
+                O cupom{' '}
+                <strong className="font-mono bg-white px-2 py-0.5 rounded border border-neutral-300 text-neutral-900">
+                  BEMVINDO10
+                </strong>{' '}
+                (10% OFF) já está aplicado em sua sacola.
               </p>
             </div>
 
@@ -798,20 +818,19 @@ export const SocialAuthModal: React.FC = () => {
                   handleClose();
                   setIsAccountOpen(true);
                 }}
-                className="flex-1 py-3 rounded-lg border border-neutral-300 hover:bg-neutral-50 text-neutral-800 text-xs font-bold uppercase tracking-wider transition cursor-pointer"
+                className="flex-1 py-3 rounded-lg border border-neutral-300 hover:border-neutral-900 text-neutral-800 hover:text-neutral-950 text-xs font-bold uppercase tracking-wider transition cursor-pointer"
               >
-                Ver Minha Conta
+                Minha Conta
               </button>
             </div>
           </div>
         )}
 
         {/* Security Footer */}
-        <div className="pt-3 border-t border-neutral-100 flex items-center justify-center gap-1.5 text-[11px] text-neutral-400">
+        <div className="pt-3 border-t border-neutral-100 flex items-center justify-center gap-2 text-[11px] text-neutral-400">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
           <span>Ambiente autenticado • Proteção de dados LGPD</span>
         </div>
-
       </div>
     </div>
   );

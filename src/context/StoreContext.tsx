@@ -649,6 +649,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         phone: phone?.trim() || '',
         provider: 'email',
         isAdmin: false,
+        phoneVerified: true,
         addresses: []
       };
 

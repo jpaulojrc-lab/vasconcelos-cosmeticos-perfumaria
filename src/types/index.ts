@@ -87,6 +87,7 @@ export interface User {
   provider: 'google' | 'apple' | 'email';
   addresses: Address[];
   isAdmin?: boolean;
+  phoneVerified?: boolean;
 }
 
 export type PaymentMethod = 'pix' | 'credit_card' | 'boleto';

@@ -510,6 +510,69 @@ app.post('/api/orders/notify-admin', async (req, res) => {
   }
 });
 
+// API Endpoint to send Phone/WhatsApp Verification Code (OTP) when registering a customer
+app.post('/api/auth/send-verification-code', async (req, res) => {
+  try {
+    const { name, phone, email, code } = req.body || {};
+    if (!phone || !code) {
+      return res.status(400).json({ success: false, error: 'Número de celular e código são obrigatórios.' });
+    }
+
+    const firstName = (name || 'Cliente').trim().split(' ')[0];
+    const message = `🔐 *VASCONCELOS — Código de Validação de Cadastro*\n\nOlá, *${firstName}*! Seu código de confirmação para validar seu número no site da *VASCONCELOS* é:\n\n👉 *${code}*\n\nDigite este código na tela de cadastro para liberar sua conta e seu cupom *BEMVINDO10* (10% OFF).`;
+
+    const waResult = await triggerWhatsAppAutomation({
+      customerName: name || 'Cliente Vasconcelos',
+      customerPhone: phone,
+      customerEmail: email || '',
+      orderNumber: `VALIDACAO-${code}`,
+      amount: 0,
+      stage: 'phone_verification',
+      pixKey: '',
+      message
+    });
+
+    if (email && typeof email === 'string' && email.includes('@')) {
+      const sender = (billingAutomationConfig.senderEmail || 'sandravasconcellossillva@gmail.com').trim();
+      const passToTry = billingAutomationConfig.smtpAppPassword || 'S23086072';
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; border: 1px solid #e5e5e5; border-radius: 14px; overflow: hidden;">
+          <div style="background: #111111; color: #ffffff; padding: 20px 24px; text-align: center;">
+            <h2 style="margin: 0; letter-spacing: 3px; font-size: 18px;">VASCONCELOS</h2>
+            <p style="margin: 4px 0 0; font-size: 11px; color: #d4d4d4; text-transform: uppercase;">Código de Validação de Cadastro</p>
+          </div>
+          <div style="padding: 24px; color: #111111; background: #ffffff; text-align: center;">
+            <p style="font-size: 14px;">Olá, <strong>${name || 'Cliente'}</strong>!</p>
+            <p style="font-size: 13px; color: #555;">Use o código abaixo para validar seu número <strong>${phone}</strong> e concluir seu cadastro:</p>
+            <div style="margin: 20px auto; padding: 16px 24px; background: #F7F6F2; border: 2px dashed #111111; border-radius: 12px; font-size: 28px; font-weight: bold; letter-spacing: 6px; color: #8B1E3F; max-width: 240px;">
+              ${code}
+            </div>
+            <p style="font-size: 11px; color: #777;">Assim que validado, seu cupom <strong>BEMVINDO10</strong> (10% OFF) será ativado automaticamente.</p>
+          </div>
+        </div>
+      `;
+
+      sendGmailSmtpDirect({
+        fromEmail: sender,
+        password: passToTry,
+        toEmail: email.trim().toLowerCase(),
+        subject: `🔐 Código ${code} — Validação de Cadastro VASCONCELOS`,
+        textBody: message,
+        htmlBody
+      }).catch(() => {});
+    }
+
+    return res.json({
+      success: true,
+      sentInBackground: waResult.sentInBackground,
+      channelDetail: waResult.channelDetail,
+      waMeUrl: waResult.waMeUrl
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Configuração da Régua de Automação de Cobrança (E-mail + WhatsApp API/Webhook)
 let billingAutomationConfig = {
   enabled: true,
