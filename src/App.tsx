@@ -26,7 +26,7 @@ const MainContent: React.FC = () => {
       <Header />
 
       {/* Main View Router */}
-      <main className="flex-1 pb-16 md:pb-0">
+      <main className="flex-1 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
         {viewMode === 'admin' && <AdminPanel />}
         {viewMode === 'blog' && <BlogSection />}
         {viewMode === 'store' && (

@@ -28,50 +28,65 @@ export const MobileBottomNav: React.FC = () => {
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
 
   return (
-    <div className="md:hidden fixed bottom-0 inset-x-0 z-40">
+    <div
+      id="vsc-mobile-bottom-nav"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 pointer-events-none"
+      style={{
+        paddingLeft: 'env(safe-area-inset-left, 0px)',
+        paddingRight: 'env(safe-area-inset-right, 0px)'
+      }}
+    >
       {/* Barra Flutuante Inteligente para o Cliente no Celular quando há itens na sacola */}
       {totalItems > 0 && viewMode === 'store' && (
-        <div className="mx-3 mb-2 p-3 rounded-2xl bg-[#111111] text-white shadow-2xl border border-white/15 flex items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-2">
+        <div className="pointer-events-auto mx-2.5 mb-2 p-2.5 rounded-2xl bg-[#111111] text-white shadow-2xl border border-white/15 flex items-center justify-between gap-2 animate-in fade-in slide-in-from-bottom-2">
           <div
             onClick={() => setIsCartOpen(true)}
-            className="flex items-center gap-2.5 cursor-pointer"
+            className="flex items-center gap-2 cursor-pointer min-w-0"
           >
-            <div className="w-9 h-9 rounded-xl bg-[#8B1E3F] text-white flex items-center justify-center font-extrabold text-xs">
+            <div className="w-8 h-8 rounded-xl bg-[#8B1E3F] text-white flex items-center justify-center font-extrabold text-xs shrink-0">
               {totalItems}
             </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-neutral-300 font-bold">
+            <div className="min-w-0">
+              <p className="text-[9px] uppercase tracking-wider text-neutral-300 font-bold truncate">
                 Sua Sacola • Frete Grátis
               </p>
-              <p className="text-sm font-extrabold text-white">{formatBRL(cartTotal)}</p>
+              <p className="text-xs sm:text-sm font-extrabold text-white truncate">
+                {formatBRL(cartTotal)}
+              </p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={() => setIsCheckoutOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shrink-0"
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1 cursor-pointer shrink-0"
           >
-            <span>Finalizar Pedido</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>Finalizar</span>
+            <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Barra de Navegação Inferior do App no Celular */}
-      <div className="bg-white border-t border-neutral-200 px-2 py-2 flex items-center justify-around shadow-lg">
+      {/* Barra de Navegação Inferior do App no Celular (Adaptada a qualquer modelo e navegador) */}
+      <nav
+        aria-label="Menu inferior mobile"
+        className="pointer-events-auto bg-white/95 backdrop-blur-md border-t border-neutral-200 px-1 pt-1.5 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.06)]"
+        style={{
+          paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))'
+        }}
+      >
         <button
           onClick={() => {
             setViewMode('store');
             setSelectedCategory('todos');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex flex-col items-center gap-1 px-2 py-0.5 transition cursor-pointer ${
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition cursor-pointer ${
             viewMode === 'store' ? 'text-neutral-950 font-extrabold' : 'text-neutral-500'
           }`}
         >
-          <Home className="w-5 h-5" />
-          <span className="text-[10px] font-semibold">Início</span>
+          <Home className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-[9px] sm:text-[10px] font-semibold truncate">Início</span>
         </button>
 
         <button
@@ -80,25 +95,25 @@ export const MobileBottomNav: React.FC = () => {
             const catEl = document.getElementById('catalogo-produtos');
             if (catEl) catEl.scrollIntoView({ behavior: 'smooth' });
           }}
-          className="flex flex-col items-center gap-1 px-2 py-0.5 text-neutral-500 hover:text-neutral-950 transition cursor-pointer"
+          className="flex-1 flex flex-col items-center gap-0.5 py-1 text-neutral-500 hover:text-neutral-950 transition cursor-pointer"
         >
-          <Grid className="w-5 h-5" />
-          <span className="text-[10px] font-semibold">Produtos</span>
+          <Grid className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-[9px] sm:text-[10px] font-semibold truncate">Produtos</span>
         </button>
 
         <button
           onClick={() => setIsCartOpen(true)}
-          className="flex flex-col items-center gap-1 px-2 py-0.5 text-neutral-500 hover:text-neutral-950 transition relative cursor-pointer"
+          className="flex-1 flex flex-col items-center gap-0.5 py-1 text-neutral-500 hover:text-neutral-950 transition relative cursor-pointer"
         >
           <div className="relative">
-            <ShoppingBag className="w-5 h-5" />
+            <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5" />
             {totalItems > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-[#8B1E3F] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-2 bg-[#8B1E3F] text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">
                 {totalItems}
               </span>
             )}
           </div>
-          <span className="text-[10px] font-semibold">Sacola</span>
+          <span className="text-[9px] sm:text-[10px] font-semibold truncate">Sacola</span>
         </button>
 
         <button
@@ -109,11 +124,11 @@ export const MobileBottomNav: React.FC = () => {
               setIsAuthOpen(true);
             }
           }}
-          className="flex flex-col items-center gap-1 px-2 py-0.5 text-neutral-500 hover:text-neutral-950 transition cursor-pointer"
+          className="flex-1 flex flex-col items-center gap-0.5 py-1 text-neutral-500 hover:text-neutral-950 transition cursor-pointer"
         >
-          <User className="w-5 h-5" />
-          <span className="text-[10px] font-semibold">
-            {currentUser ? currentUser.name.split(' ')[0] : 'Meus Pedidos'}
+          <User className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-[9px] sm:text-[10px] font-semibold truncate max-w-[64px]">
+            {currentUser ? currentUser.name.split(' ')[0] : 'Pedidos'}
           </span>
         </button>
 
@@ -122,14 +137,14 @@ export const MobileBottomNav: React.FC = () => {
             setViewMode('admin');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex flex-col items-center gap-1 px-2 py-0.5 transition cursor-pointer ${
+          className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition cursor-pointer ${
             isAdminAuthenticated ? 'text-[#8B1E3F] font-extrabold' : 'text-neutral-400'
           }`}
         >
-          <ShieldAlert className="w-5 h-5" />
-          <span className="text-[10px] font-semibold">Painel ADM</span>
+          <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5" />
+          <span className="text-[9px] sm:text-[10px] font-semibold truncate">ADM</span>
         </button>
-      </div>
+      </nav>
     </div>
   );
 };

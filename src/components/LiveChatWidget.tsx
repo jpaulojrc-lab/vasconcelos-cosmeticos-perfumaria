@@ -18,7 +18,18 @@ interface ChatMessage {
 }
 
 export const LiveChatWidget: React.FC = () => {
-  const { isChatOpen, setIsChatOpen, orders } = useStore();
+  const {
+    isChatOpen,
+    setIsChatOpen,
+    orders,
+    cart,
+    viewMode,
+    isCartOpen,
+    isCheckoutOpen,
+    isAuthOpen,
+    isAccountOpen,
+    isProductModalOpen
+  } = useStore();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'msg-welcome',
@@ -36,6 +47,71 @@ export const LiveChatWidget: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Medição dinâmica para adaptar o botão e o chat a qualquer modelo de celular e navegador (Safari, Chrome, Samsung, etc.)
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  );
+  const [mobileBottomOffset, setMobileBottomOffset] = useState<number>(76);
+  const [viewportHeight, setViewportHeight] = useState<number>(() =>
+    typeof window !== 'undefined'
+      ? window.visualViewport?.height || window.innerHeight
+      : 700
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updateLayoutMetrics = () => {
+      const isMob = window.innerWidth < 768;
+      setIsMobileViewport(isMob);
+
+      const vv = window.visualViewport;
+      const currentVvHeight = vv ? vv.height : window.innerHeight;
+      setViewportHeight(currentVvHeight);
+
+      // Diferença causada por barras inferiores dinâmicas do navegador mobile (Safari/Chrome) ou teclado virtual
+      const browserBottomBarOffset = vv
+        ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop))
+        : 0;
+
+      // Mede a altura real da barra de navegação inferior (#vsc-mobile-bottom-nav ou #vsc-admin-mobile-dock)
+      const navEl =
+        document.getElementById('vsc-mobile-bottom-nav') ||
+        document.getElementById('vsc-admin-mobile-dock');
+      const navHeight = navEl ? navEl.getBoundingClientRect().height : 62;
+
+      // Posiciona o botão 12px acima do menu inferior (e da barra da sacola quando ativa)
+      setMobileBottomOffset(Math.round(navHeight + browserBottomBarOffset + 12));
+    };
+
+    updateLayoutMetrics();
+
+    window.addEventListener('resize', updateLayoutMetrics);
+    window.addEventListener('orientationchange', updateLayoutMetrics);
+    window.visualViewport?.addEventListener('resize', updateLayoutMetrics);
+    window.visualViewport?.addEventListener('scroll', updateLayoutMetrics);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(updateLayoutMetrics);
+      const navEl = document.getElementById('vsc-mobile-bottom-nav');
+      const adminDockEl = document.getElementById('vsc-admin-mobile-dock');
+      if (navEl) resizeObserver.observe(navEl);
+      if (adminDockEl) resizeObserver.observe(adminDockEl);
+    }
+
+    const timer = setTimeout(updateLayoutMetrics, 150);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateLayoutMetrics);
+      window.removeEventListener('orientationchange', updateLayoutMetrics);
+      window.visualViewport?.removeEventListener('resize', updateLayoutMetrics);
+      window.visualViewport?.removeEventListener('scroll', updateLayoutMetrics);
+      resizeObserver?.disconnect();
+    };
+  }, [cart.length, viewMode, isChatOpen]);
 
   useEffect(() => {
     if (isChatOpen) {
@@ -194,23 +270,38 @@ export const LiveChatWidget: React.FC = () => {
     }, 500);
   };
 
+  // Oculta o botão flutuante quando algum modal/gaveta estiver aberto ou quando estiver no painel ADM
+  const anyOverlayOpen =
+    isCartOpen || isCheckoutOpen || isAuthOpen || isAccountOpen || isProductModalOpen;
+  if (viewMode === 'admin') {
+    return null;
+  }
+
   return (
     <>
-      {/* Discrete Prestige Concierge Launcher */}
-      {!isChatOpen && (
+      {/* Discrete Prestige Concierge Launcher — Adaptado automaticamente para qualquer celular/navegador e PC */}
+      {!isChatOpen && !anyOverlayOpen && (
         <button
           onClick={() => setIsChatOpen(true)}
-          className="fixed bottom-5 right-5 z-40 bg-[#111111] hover:bg-[#8B1E3F] text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2.5 transition-colors duration-200 border border-white/10 cursor-pointer"
+          style={
+            isMobileViewport
+              ? {
+                  bottom: `${mobileBottomOffset}px`,
+                  right: 'max(0.75rem, env(safe-area-inset-right, 0.75rem))'
+                }
+              : undefined
+          }
+          className="fixed md:bottom-6 md:right-6 z-30 bg-[#111111]/95 hover:bg-[#8B1E3F] text-white px-3 py-2 md:px-4 md:py-3 rounded-full md:rounded-lg shadow-lg flex items-center gap-1.5 md:gap-2.5 transition-all duration-200 border border-white/15 cursor-pointer backdrop-blur-xs"
           aria-label="Abrir Beauty Concierge"
         >
-          <MessageSquare className="w-4 h-4" />
-          <span className="text-xs font-bold uppercase tracking-[0.12em]">
+          <MessageSquare className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-400 md:text-white shrink-0" />
+          <span className="text-[10px] md:text-xs font-extrabold uppercase tracking-[0.12em]">
             Concierge
           </span>
         </button>
       )}
 
-      {/* Chat Window */}
+      {/* Chat Window — Enquadrado dinamicamente conforme a altura visível do navegador e modelo do celular */}
       <AnimatePresence>
         {isChatOpen && (
           <motion.div
@@ -218,7 +309,15 @@ export const LiveChatWidget: React.FC = () => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ duration: 0.2 }}
-            className="fixed bottom-4 sm:bottom-6 right-3 sm:right-6 z-50 w-[94vw] sm:w-[380px] h-[520px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-neutral-200 flex flex-col overflow-hidden"
+            style={
+              isMobileViewport
+                ? {
+                    bottom: `${Math.max(68, mobileBottomOffset - 4)}px`,
+                    maxHeight: `${Math.max(280, viewportHeight - mobileBottomOffset - 16)}px`
+                  }
+                : undefined
+            }
+            className="fixed inset-x-2.5 sm:inset-x-auto sm:bottom-6 sm:right-6 z-50 sm:w-[380px] h-[480px] sm:h-[520px] max-h-[78dvh] sm:max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-neutral-200 flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="p-4 bg-[#111111] text-white flex items-center justify-between">

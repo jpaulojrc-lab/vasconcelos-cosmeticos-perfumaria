@@ -3924,7 +3924,15 @@ export const AdminPanel: React.FC = () => {
       })()}
 
       {/* BARRA INFERIOR FIXA PARA O ADM NO CELULAR (md:hidden) */}
-      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#111111] text-white border-t border-neutral-800 px-2 py-2 flex items-center justify-around shadow-2xl">
+      <div
+        id="vsc-admin-mobile-dock"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#111111] text-white border-t border-neutral-800 px-2 pt-2 flex items-center justify-around shadow-2xl"
+        style={{
+          paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))',
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)'
+        }}
+      >
         <button
           type="button"
           onClick={() => {
