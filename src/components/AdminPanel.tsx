@@ -1394,160 +1394,107 @@ export const AdminPanel: React.FC = () => {
             {/* ====================================================================
                 PAINEL FÁCIL PARA O ADM: COMPRAS, DATAS RECEBIDAS, SALDO E ENTREGA
                ==================================================================== */}
-            <div className="bg-white p-5 sm:p-8 rounded-2xl border border-neutral-200 shadow-xs space-y-6">
-              {/* Cabeçalho Simples e Explicativo para o ADM */}
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-neutral-200">
+            <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-neutral-200 shadow-xs space-y-4">
+              {/* Cabeçalho Compacto e Explicativo para o ADM */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-neutral-200">
                 <div>
-                  <span className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-emerald-700 block mb-1">
+                  <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-emerald-700 block">
                     Painel Fácil de Gestão • Vasconcelos
                   </span>
-                  <h2 className="text-xl sm:text-2xl font-extrabold text-neutral-950">
+                  <h2 className="text-base sm:text-xl font-extrabold text-neutral-950">
                     Controle de Pedidos, Valores Recebidos e Entregas
                   </h2>
-                  <p className="text-xs sm:text-sm text-neutral-600 mt-1">
-                    Veja quem comprou, anote a <strong>data e o valor que recebeu</strong> (o saldo calcula sozinho) e marque se o pedido está <strong>Aguardando</strong> ou <strong>Entregue</strong>.
+                  <p className="text-[11px] sm:text-xs text-neutral-600">
+                    Anote a <strong>data e o valor que recebeu</strong> (o saldo calcula sozinho) e marque <strong>Aguardando</strong> ou <strong>Entregue</strong>.
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={handleExportFinancialCsv}
-                    className="px-4 py-2.5 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-extrabold flex items-center gap-2 transition cursor-pointer shadow-xs"
-                    title="Baixar planilha para Excel"
-                  >
-                    <FileSpreadsheet className="w-4 h-4" />
-                    <span>Baixar Planilha (Excel)</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleExportFinancialCsv}
+                  className="self-start sm:self-auto px-3 py-2 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-[11px] font-extrabold flex items-center gap-1.5 transition cursor-pointer shadow-xs shrink-0"
+                  title="Baixar planilha para Excel"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <span>Baixar Excel</span>
+                </button>
               </div>
 
-              {/* Guia Rápido de 3 Passos para facilitar o uso do ADM */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-[#F7F6F2] p-3.5 rounded-2xl border border-neutral-200 text-xs">
-                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-neutral-200/80">
-                  <span className="w-7 h-7 rounded-full bg-neutral-950 text-white font-extrabold flex items-center justify-center shrink-0">
-                    1
-                  </span>
-                  <div>
-                    <p className="font-extrabold text-neutral-900">Anote quando receber</p>
-                    <p className="text-[11px] text-neutral-600">
-                      Clique em <strong>+ Lançar Data e Valor Recebido</strong> ou em <strong>Quitar Tudo</strong>.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-neutral-200/80">
-                  <span className="w-7 h-7 rounded-full bg-emerald-700 text-white font-extrabold flex items-center justify-center shrink-0">
-                    2
-                  </span>
-                  <div>
-                    <p className="font-extrabold text-neutral-900">Saldo calcula sozinho</p>
-                    <p className="text-[11px] text-neutral-600">
-                      O sistema mostra na hora quanto o cliente <strong>já pagou</strong> e quanto <strong>falta pagar</strong>.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-neutral-200/80">
-                  <span className="w-7 h-7 rounded-full bg-[#8B1E3F] text-white font-extrabold flex items-center justify-center shrink-0">
-                    3
-                  </span>
-                  <div>
-                    <p className="font-extrabold text-neutral-900">Marque a Entrega e Envie</p>
-                    <p className="text-[11px] text-neutral-600">
-                      Clique em <strong>Aguardando</strong> ou <strong>Entregue</strong> e envie o PDF ou WhatsApp ao cliente.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 4 Cartões Grandes e Diretos: Valor das Compras | Já Recebido | Falta Receber | Entregas */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 4 Cartões Compactos no Topo (Visíveis de imediato no PC e Celular) */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
                 {/* Card 1: Total de Compras */}
-                <div className="p-5 rounded-2xl bg-neutral-50 border border-neutral-200 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-extrabold text-neutral-700">
-                    <span>1. Valor Total das Compras</span>
-                    <span className="px-2 py-0.5 rounded-full bg-neutral-200 text-neutral-900 text-[10px] font-bold">
-                      {financialOrders.length} pedidos
+                <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200">
+                  <div className="flex items-center justify-between text-[10px] font-extrabold text-neutral-600">
+                    <span>1. Total Compras</span>
+                    <span className="px-1.5 py-0.5 rounded bg-neutral-200 text-neutral-900 text-[9px] font-bold">
+                      {financialOrders.length} ped.
                     </span>
                   </div>
-                  <p className="text-2xl font-black text-neutral-950">
+                  <p className="text-base sm:text-xl font-black text-neutral-950 mt-0.5">
                     {formatBRL(totalAllOrdersGross)}
-                  </p>
-                  <p className="text-[11px] text-neutral-500 font-medium">
-                    Soma de todos os pedidos feitos no site
                   </p>
                 </div>
 
                 {/* Card 2: Total Já Recebido pelo ADM */}
-                <div className="p-5 rounded-2xl bg-emerald-50/80 border border-emerald-300 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-extrabold text-emerald-900">
-                    <span>2. Total Já Recebido (Caixa)</span>
-                    <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                <div className="p-3 rounded-xl bg-emerald-50/80 border border-emerald-300">
+                  <div className="flex items-center justify-between text-[10px] font-extrabold text-emerald-900">
+                    <span>2. Já Recebido</span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
                   </div>
-                  <p className="text-2xl font-black text-emerald-700">
+                  <p className="text-base sm:text-xl font-black text-emerald-700 mt-0.5">
                     {formatBRL(totalAvailableInCashGross)}
-                  </p>
-                  <p className="text-[11px] text-emerald-900 font-medium">
-                    Dinheiro já pago pelos clientes
                   </p>
                 </div>
 
                 {/* Card 3: Total que Falta Receber (Saldo Restante) */}
-                <div className="p-5 rounded-2xl bg-amber-50/90 border border-amber-300 space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-extrabold text-amber-950">
-                    <span>3. Falta Receber (Saldo)</span>
-                    <Clock className="w-4 h-4 text-[#8B1E3F]" />
+                <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-300">
+                  <div className="flex items-center justify-between text-[10px] font-extrabold text-amber-950">
+                    <span>3. Falta Receber</span>
+                    <Clock className="w-3.5 h-3.5 text-[#8B1E3F]" />
                   </div>
-                  <p className="text-2xl font-black text-[#8B1E3F]">
+                  <p className="text-base sm:text-xl font-black text-[#8B1E3F] mt-0.5">
                     {formatBRL(totalAllRemainingBalance)}
-                  </p>
-                  <p className="text-[11px] text-amber-950 font-medium">
-                    Valor que os clientes ainda precisam pagar
                   </p>
                 </div>
 
                 {/* Card 4: Resumo das Entregas */}
-                <div className="p-5 rounded-2xl bg-neutral-950 text-white space-y-1.5">
-                  <div className="flex items-center justify-between text-xs font-extrabold text-emerald-400">
-                    <span>4. Status das Entregas</span>
-                    <Truck className="w-4 h-4 text-emerald-400" />
+                <div className="p-3 rounded-xl bg-neutral-950 text-white">
+                  <div className="flex items-center justify-between text-[10px] font-extrabold text-emerald-400">
+                    <span>4. Entregas</span>
+                    <Truck className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
-                  <div className="flex items-baseline gap-3 pt-0.5">
-                    <div>
-                      <span className="text-2xl font-black text-emerald-400">{deliveredOrdersCount}</span>
-                      <span className="text-xs text-neutral-300 ml-1 font-bold">Entregues ✅</span>
-                    </div>
+                  <div className="flex items-baseline gap-2 mt-0.5">
+                    <span className="text-sm sm:text-lg font-black text-emerald-400">
+                      {deliveredOrdersCount} <span className="text-[10px] font-bold text-neutral-300">Entregues ✅</span>
+                    </span>
                     <span className="text-neutral-600">•</span>
-                    <div>
-                      <span className="text-2xl font-black text-amber-400">{waitingDeliveryOrdersCount}</span>
-                      <span className="text-xs text-neutral-300 ml-1 font-bold">Aguardando ⏳</span>
-                    </div>
+                    <span className="text-sm sm:text-lg font-black text-amber-400">
+                      {waitingDeliveryOrdersCount} <span className="text-[10px] font-bold text-neutral-300">Aguard. ⏳</span>
+                    </span>
                   </div>
-                  <p className="text-[11px] text-neutral-400">
-                    Modalidade: VasconcelosExpress (Frete Grátis)
-                  </p>
                 </div>
               </div>
 
-              {/* Filtros Claros + Busca */}
-              <div className="space-y-4">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0">
+              {/* Filtros Compactos + Busca */}
+              <div className="space-y-3">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
                     {[
-                      { id: 'todos', label: `📋 Todos os Pedidos (${financialOrders.length})` },
+                      { id: 'todos', label: `📋 Todos (${financialOrders.length})` },
                       {
                         id: 'pendentes',
                         label: `⏳ Falta Receber (${financialOrders.filter((x) => x.remainingBalance > 0.01).length})`
                       },
                       {
                         id: 'quitados',
-                        label: `✅ Já Quitados (${financialOrders.filter((x) => x.remainingBalance <= 0.01 && x.receivedGross > 0).length})`
+                        label: `✅ Quitados (${financialOrders.filter((x) => x.remainingBalance <= 0.01 && x.receivedGross > 0).length})`
                       }
                     ].map((tab) => (
                       <button
                         key={tab.id}
                         type="button"
                         onClick={() => setFinanceFilter(tab.id as any)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition cursor-pointer ${
                           financeFilter === tab.id
                             ? 'bg-neutral-950 text-white shadow-xs'
                             : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
@@ -1558,35 +1505,35 @@ export const AdminPanel: React.FC = () => {
                     ))}
                   </div>
 
-                  {/* Busca e Filtro Simples de Entrega (Entregue ou Aguardando) */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                    <div className="relative min-w-[240px]">
+                  {/* Busca e Filtro Simples de Entrega */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                    <div className="relative min-w-[210px]">
                       <input
                         type="text"
-                        placeholder="Buscar nome do cliente, WhatsApp ou pedido..."
+                        placeholder="Buscar cliente, WhatsApp ou pedido..."
                         value={orderSearch}
                         onChange={(e) => setOrderSearch(e.target.value)}
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl pl-8 pr-3 py-2 text-xs font-medium focus:outline-hidden focus:border-neutral-900"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg pl-7 pr-2.5 py-1.5 text-[11px] font-medium focus:outline-hidden focus:border-neutral-900"
                       />
-                      <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2.5" />
+                      <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2 top-2" />
                     </div>
 
                     <select
                       value={orderStatusFilter}
                       onChange={(e) => setOrderStatusFilter(e.target.value)}
-                      className="bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs font-extrabold text-neutral-800 cursor-pointer"
+                      className="bg-neutral-50 border border-neutral-300 rounded-lg px-2.5 py-1.5 text-[11px] font-extrabold text-neutral-800 cursor-pointer"
                     >
-                      <option value="todos">📦 Entrega: Mostrar Todos</option>
-                      <option value="aguardando">⏳ Somente Aguardando Entrega</option>
-                      <option value="entregue">✅ Somente Já Entregues</option>
+                      <option value="todos">📦 Entrega: Todos</option>
+                      <option value="aguardando">⏳ Aguardando Entrega</option>
+                      <option value="entregue">✅ Já Entregues</option>
                     </select>
                   </div>
                 </div>
 
                 {/* =========================================================
-                    VISÃO CELULAR (CARTÕES ADAPTADOS PARA O ADM) - lg:hidden
+                    VISÃO CELULAR COMPACTA (TUDO VISÍVEL NA TELA) - lg:hidden
                    ========================================================= */}
-                <div className="lg:hidden space-y-4">
+                <div className="lg:hidden space-y-2.5">
                   {filteredFinancialOrders.map((f) => {
                     const isQuitado = f.remainingBalance <= 0.01 && f.receivedGross > 0;
                     const isEntregue = f.order.orderStatus === 'entregue';
@@ -1594,70 +1541,62 @@ export const AdminPanel: React.FC = () => {
                     return (
                       <div
                         key={`mob-${f.order.id}`}
-                        className="p-4 rounded-2xl bg-[#F7F6F2] border-2 border-neutral-300 shadow-xs space-y-4"
+                        className="p-3 rounded-xl bg-[#F7F6F2] border border-neutral-300 shadow-2xs space-y-2"
                       >
-                        {/* 1. Pedido / Cliente / Itens */}
-                        <div className="flex items-start justify-between gap-2 pb-3 border-b border-neutral-200">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-black text-sm text-neutral-950">
+                        {/* Linha 1: Pedido, Cliente, WhatsApp + Botão Status (Aguardando / Entregue) */}
+                        <div className="flex items-start justify-between gap-2 pb-2 border-b border-neutral-200">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-black text-xs text-neutral-950">
                                 {f.order.orderNumber}
                               </span>
-                              <span className="text-[11px] text-neutral-500">
+                              <span className="text-[10px] text-neutral-500">
                                 {formatDate(f.order.createdAt)}
                               </span>
                             </div>
-                            <p className="text-base font-extrabold text-neutral-950 mt-0.5">
+                            <p className="text-sm font-extrabold text-neutral-950 truncate">
                               {f.order.customer.name}
                             </p>
                             {f.order.customer.phone && (
-                              <span className="inline-block mt-1 text-xs font-mono font-bold text-emerald-900 bg-emerald-100/80 px-2 py-0.5 rounded-lg border border-emerald-300">
+                              <span className="inline-block text-[11px] font-mono font-bold text-emerald-900">
                                 📱 {f.order.customer.phone}
                               </span>
                             )}
                           </div>
 
-                          {/* Status (Entregue ou Aguardando) em 1 Toque no Celular */}
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-neutral-500">
-                              Status da Entrega:
-                            </span>
-                            <div className="inline-flex rounded-xl bg-white p-1 border border-neutral-300 shadow-2xs">
-                              <button
-                                type="button"
-                                onClick={() => updateOrderStatus(f.order.id, 'pendente')}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer ${
-                                  !isEntregue
-                                    ? 'bg-amber-400 text-neutral-950 shadow-2xs'
-                                    : 'text-neutral-500 hover:text-neutral-900'
-                                }`}
-                              >
-                                ⏳ Aguardando
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => updateOrderStatus(f.order.id, 'entregue')}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer ${
-                                  isEntregue
-                                    ? 'bg-emerald-600 text-white shadow-2xs'
-                                    : 'text-neutral-500 hover:text-neutral-900'
-                                }`}
-                              >
-                                ✅ Entregue
-                              </button>
-                            </div>
+                          {/* Status (Entregue ou Aguardando) Compacto */}
+                          <div className="inline-flex rounded-lg bg-white p-0.5 border border-neutral-300 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => updateOrderStatus(f.order.id, 'pendente')}
+                              className={`px-2 py-1 rounded-md text-[10px] font-extrabold transition cursor-pointer ${
+                                !isEntregue
+                                  ? 'bg-amber-400 text-neutral-950'
+                                  : 'text-neutral-500'
+                              }`}
+                            >
+                              ⏳ Aguard.
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateOrderStatus(f.order.id, 'entregue')}
+                              className={`px-2 py-1 rounded-md text-[10px] font-extrabold transition cursor-pointer ${
+                                isEntregue
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'text-neutral-500'
+                              }`}
+                            >
+                              ✅ Entregue
+                            </button>
                           </div>
                         </div>
 
-                        {/* Itens da Compra */}
-                        <div className="bg-white rounded-xl p-3 border border-neutral-200 space-y-1">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-neutral-400 block">
-                            Itens do Pedido:
-                          </span>
+                        {/* Linha 2: Itens em linha compacta */}
+                        <div className="bg-white rounded-lg px-2.5 py-1.5 border border-neutral-200 space-y-0.5">
                           {f.order.items.map((it, idx) => (
-                            <p key={idx} className="text-xs text-neutral-800 flex justify-between">
+                            <p key={idx} className="text-[11px] text-neutral-800 flex justify-between">
                               <span className="truncate pr-2">
-                                <strong>{it.quantity}x</strong> {it.name}
+                                <strong>{it.quantity}×</strong> {it.name}
                               </span>
                               <span className="font-bold shrink-0">
                                 {formatBRL(it.price * it.quantity)}
@@ -1666,42 +1605,42 @@ export const AdminPanel: React.FC = () => {
                           ))}
                         </div>
 
-                        {/* 2 & 4. Valor da Compra | Recebido vs. Saldo Restante */}
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                          <div className="p-2.5 rounded-xl bg-white border border-neutral-200">
-                            <span className="text-[9px] font-extrabold uppercase text-neutral-500 block">
-                              Valor da Compra
+                        {/* Linha 3: Valor da Compra | Já Recebido | Saldo Restante */}
+                        <div className="grid grid-cols-3 gap-1.5 text-center">
+                          <div className="p-1.5 rounded-lg bg-white border border-neutral-200">
+                            <span className="text-[8px] font-extrabold uppercase text-neutral-500 block">
+                              Valor Compra
                             </span>
-                            <p className="text-xs sm:text-sm font-black text-neutral-950 mt-0.5">
+                            <p className="text-xs font-black text-neutral-950">
                               {formatBRL(f.order.total)}
                             </p>
                           </div>
 
-                          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                            <span className="text-[9px] font-extrabold uppercase text-emerald-800 block">
+                          <div className="p-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                            <span className="text-[8px] font-extrabold uppercase text-emerald-800 block">
                               Já Recebido
                             </span>
-                            <p className="text-xs sm:text-sm font-black text-emerald-700 mt-0.5">
+                            <p className="text-xs font-black text-emerald-700">
                               {formatBRL(f.receivedGross)}
                             </p>
                           </div>
 
                           <div
-                            className={`p-2.5 rounded-xl border ${
+                            className={`p-1.5 rounded-lg border ${
                               isQuitado
                                 ? 'bg-emerald-100 border-emerald-300'
                                 : 'bg-amber-50 border-amber-300'
                             }`}
                           >
                             <span
-                              className={`text-[9px] font-extrabold uppercase block ${
+                              className={`text-[8px] font-extrabold uppercase block ${
                                 isQuitado ? 'text-emerald-900' : 'text-amber-950'
                               }`}
                             >
                               Saldo Restante
                             </span>
                             <p
-                              className={`text-xs sm:text-sm font-black mt-0.5 ${
+                              className={`text-xs font-black ${
                                 isQuitado ? 'text-emerald-800' : 'text-[#8B1E3F]'
                               }`}
                             >
@@ -1710,95 +1649,98 @@ export const AdminPanel: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* 3. Datas & Valores Recebidos (ADM) */}
-                        <div className="bg-white rounded-xl p-3 border border-emerald-200 space-y-2">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-900 block">
-                            Datas & Valores Recebidos (ADM):
-                          </span>
+                        {/* Linha 4: Datas & Valores Recebidos (ADM) + Botão Lançar */}
+                        <div className="bg-white rounded-lg p-2 border border-emerald-200 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-900">
+                              Datas & Valores Recebidos:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenConditionModal(f.order)}
+                              className="px-2.5 py-1 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white text-[10px] font-extrabold flex items-center gap-1 cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Lançar Data/Valor</span>
+                            </button>
+                          </div>
+
                           {f.receipts.length > 0 ? (
-                            <div className="space-y-1.5">
+                            <div className="flex flex-wrap gap-1">
                               {f.receipts.map((r) => (
                                 <div
                                   key={r.id}
-                                  className="flex items-center justify-between text-xs bg-emerald-50/70 px-2.5 py-1.5 rounded-lg border border-emerald-200"
+                                  className="inline-flex items-center gap-1.5 text-[11px] bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200"
                                 >
                                   <span className="font-bold text-neutral-800">
-                                    📅 {formatReceiptDateBr(r.date)}
+                                    📅 {formatReceiptDateBr(r.date)}:
                                   </span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-black text-emerald-700">
-                                      {formatBRL(r.amount)}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleQuickRemoveReceipt(f.order, r.id)}
-                                      className="text-neutral-400 hover:text-red-600 p-0.5 cursor-pointer"
-                                      title="Apagar este lançamento"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
+                                  <span className="font-black text-emerald-700">
+                                    {formatBRL(r.amount)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickRemoveReceipt(f.order, r.id)}
+                                    className="text-neutral-400 hover:text-red-600 cursor-pointer"
+                                    title="Apagar"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
                                 </div>
                               ))}
                             </div>
                           ) : (
-                            <p className="text-xs text-neutral-500">
+                            <p className="text-[11px] text-neutral-500">
                               {isQuitado
-                                ? `Pago integralmente (${formatBRL(f.order.total)})`
-                                : 'Nenhuma data/valor lançado ainda.'}
+                                ? `✅ Pago integralmente (${formatBRL(f.order.total)})`
+                                : '⏳ Nenhum valor lançado ainda.'}
                             </p>
+                          )}
+                        </div>
+
+                        {/* Linha 5: AÇÕES em 1 linha compacta no Celular */}
+                        <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                          {!isQuitado ? (
+                            <button
+                              type="button"
+                              onClick={() => handleQuickSettleOrder(f)}
+                              className="py-2 px-2 rounded-lg bg-emerald-700 text-white text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-3 h-3 shrink-0" />
+                              <span className="truncate">Quitar Tudo</span>
+                            </button>
+                          ) : (
+                            <div className="py-2 px-2 rounded-lg bg-emerald-100 text-emerald-900 text-[10px] font-extrabold flex items-center justify-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 shrink-0" />
+                              <span>Quitado</span>
+                            </div>
                           )}
 
                           <button
                             type="button"
-                            onClick={() => handleOpenConditionModal(f.order)}
-                            className="w-full py-2.5 px-3 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer"
+                            onClick={() =>
+                              generateOrderConditionsPdf({
+                                order: f.order,
+                                settledInstallments: f.settledInstallments,
+                                customTermsNote: f.order.adminPaymentTerms,
+                                firstDueDate: f.order.adminFirstDueDate,
+                                paymentReceipts: f.receipts
+                              })
+                            }
+                            className="py-2 px-2 rounded-lg bg-[#8B1E3F] text-white text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer"
                           >
-                            <Plus className="w-4 h-4" />
-                            <span>Lançar Data e Valor Recebido</span>
+                            <FileText className="w-3 h-3 shrink-0" />
+                            <span>Gerar PDF</span>
                           </button>
-                        </div>
 
-                        {/* 6. AÇÕES no Celular */}
-                        <div className="space-y-2 pt-1">
-                          {!isQuitado && (
-                            <button
-                              type="button"
-                              onClick={() => handleQuickSettleOrder(f)}
-                              className="w-full py-2.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                              <span>Quitar Tudo Agora ({formatBRL(f.remainingBalance)})</span>
-                            </button>
-                          )}
-
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                generateOrderConditionsPdf({
-                                  order: f.order,
-                                  settledInstallments: f.settledInstallments,
-                                  customTermsNote: f.order.adminPaymentTerms,
-                                  firstDueDate: f.order.adminFirstDueDate,
-                                  paymentReceipts: f.receipts
-                                })
-                              }
-                              className="py-2.5 px-3 rounded-xl bg-[#8B1E3F] text-white text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                              <FileText className="w-3.5 h-3.5" />
-                              <span>Gerar PDF Condições</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleSendDirectWhatsAppSummary(f)}
-                              className="py-2.5 px-3 rounded-xl bg-emerald-600 text-white text-[11px] font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" />
-                              <span>Enviar WhatsApp</span>
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleSendDirectWhatsAppSummary(f)}
+                            className="py-2 px-2 rounded-lg bg-emerald-600 text-white text-[10px] font-extrabold flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <MessageCircle className="w-3 h-3 shrink-0" />
+                            <span>WhatsApp</span>
+                          </button>
                         </div>
                       </div>
                     );
@@ -1806,19 +1748,19 @@ export const AdminPanel: React.FC = () => {
                 </div>
 
                 {/* =========================================================
-                    VISÃO COMPUTADOR (TABELA WEB COM AS 6 COLUNAS EXATAS) - hidden lg:block
+                    VISÃO COMPUTADOR COMPACTA (SEM CORTAR NADA NA TELA) - hidden lg:block
                     | Pedido / Cliente / Itens | Valor da Compra | Datas & Valores Recebidos (ADM) | Recebido vs. Saldo Restante | Status ( Entregue ou Aguardando ) | AÇÕES
                    ========================================================= */}
-                <div className="hidden lg:block overflow-x-auto border border-neutral-200 rounded-2xl shadow-2xs">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-neutral-100 text-neutral-700 font-extrabold uppercase tracking-wider border-b border-neutral-200">
+                <div className="hidden lg:block border border-neutral-200 rounded-xl overflow-hidden shadow-2xs">
+                  <table className="w-full table-fixed text-left text-[11px]">
+                    <thead className="bg-neutral-100 text-neutral-700 font-extrabold uppercase tracking-wider border-b border-neutral-200 text-[10px]">
                       <tr>
-                        <th className="py-4 px-4">Pedido / Cliente / Itens</th>
-                        <th className="py-4 px-4">Valor da Compra</th>
-                        <th className="py-4 px-4">Datas & Valores Recebidos (ADM)</th>
-                        <th className="py-4 px-4">Recebido vs. Saldo Restante</th>
-                        <th className="py-4 px-4">Status ( Entregue ou Aguardando )</th>
-                        <th className="py-4 px-4 text-right">AÇÕES</th>
+                        <th className="py-2.5 px-2.5 w-[22%]">Pedido / Cliente / Itens</th>
+                        <th className="py-2.5 px-2 w-[11%]">Valor da Compra</th>
+                        <th className="py-2.5 px-2.5 w-[21%]">Datas & Valores Recebidos (ADM)</th>
+                        <th className="py-2.5 px-2.5 w-[17%]">Recebido vs. Saldo Restante</th>
+                        <th className="py-2.5 px-2 w-[14%] text-center">Status (Entregue / Aguardando)</th>
+                        <th className="py-2.5 px-2.5 w-[15%] text-right">AÇÕES</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-neutral-200 bg-white">
@@ -1832,26 +1774,26 @@ export const AdminPanel: React.FC = () => {
                         );
 
                         return (
-                          <tr key={f.order.id} className="hover:bg-neutral-50/90 transition align-top">
+                          <tr key={f.order.id} className="hover:bg-neutral-50/90 transition align-middle">
                             {/* COLUNA 1: Pedido / Cliente / Itens */}
-                            <td className="py-4 px-4 max-w-[260px]">
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-black text-sm text-neutral-950">
+                            <td className="py-2.5 px-2.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-black text-xs text-neutral-950">
                                   {f.order.orderNumber}
                                 </span>
-                                <span className="text-[11px] text-neutral-400 font-medium">
+                                <span className="text-[10px] text-neutral-400 truncate">
                                   {formatDate(f.order.createdAt)}
                                 </span>
                               </div>
-                              <div className="font-extrabold text-sm text-neutral-950 mt-0.5">
+                              <div className="font-extrabold text-xs text-neutral-950 truncate">
                                 {f.order.customer.name}
                               </div>
-                              <div className="text-[11px] text-neutral-600 font-medium mt-0.5">
+                              <div className="text-[10px] text-emerald-800 font-semibold truncate">
                                 {f.order.customer.phone ? `📱 ${f.order.customer.phone}` : f.order.customer.email}
                               </div>
-                              <div className="mt-2 pt-2 border-t border-neutral-100 space-y-1">
+                              <div className="mt-1 pt-1 border-t border-neutral-100 space-y-0.5">
                                 {f.order.items.map((it, idx) => (
-                                  <p key={idx} className="text-[11px] text-neutral-800 truncate">
+                                  <p key={idx} className="text-[10px] text-neutral-700 truncate" title={`${it.quantity}x ${it.name}`}>
                                     <span className="font-extrabold text-neutral-950">{it.quantity}×</span> {it.name}
                                   </p>
                                 ))}
@@ -1859,28 +1801,28 @@ export const AdminPanel: React.FC = () => {
                             </td>
 
                             {/* COLUNA 2: Valor da Compra */}
-                            <td className="py-4 px-4 whitespace-nowrap">
-                              <div className="text-base font-black text-neutral-950">
+                            <td className="py-2.5 px-2">
+                              <div className="text-sm font-black text-neutral-950">
                                 {formatBRL(f.order.total)}
                               </div>
-                              <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-600 text-[10px] font-bold">
-                                Valor Total da Compra
+                              <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-600 text-[9px] font-bold">
+                                Total da Compra
                               </span>
                             </td>
 
                             {/* COLUNA 3: Datas & Valores Recebidos (ADM) */}
-                            <td className="py-4 px-4 min-w-[230px]">
+                            <td className="py-2.5 px-2.5">
                               {f.receipts.length > 0 ? (
-                                <div className="space-y-1.5 mb-2.5">
+                                <div className="space-y-1 mb-1.5 max-h-20 overflow-y-auto pr-0.5">
                                   {f.receipts.map((r) => (
                                     <div
                                       key={r.id}
-                                      className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-1.5 text-xs"
+                                      className="flex items-center justify-between gap-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 text-[10px]"
                                     >
                                       <span className="font-bold text-neutral-900">
                                         📅 {formatReceiptDateBr(r.date)}
                                       </span>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-1">
                                         <span className="font-black text-emerald-700">
                                           {formatBRL(r.amount)}
                                         </span>
@@ -1890,60 +1832,60 @@ export const AdminPanel: React.FC = () => {
                                           className="text-neutral-400 hover:text-red-600 transition cursor-pointer"
                                           title="Apagar este valor"
                                         >
-                                          <X className="w-3.5 h-3.5" />
+                                          <X className="w-3 h-3" />
                                         </button>
                                       </div>
                                     </div>
                                   ))}
                                 </div>
                               ) : isFullySettled ? (
-                                <div className="mb-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-[11px] font-bold">
-                                  ✅ Recebido à vista: {formatBRL(f.receivedGross)}
+                                <div className="mb-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 text-[10px] font-bold truncate">
+                                  ✅ Pago: {formatBRL(f.receivedGross)}
                                 </div>
                               ) : (
-                                <div className="mb-2 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold">
-                                  ⏳ Nenhum valor lançado ainda
+                                <div className="mb-1.5 px-2 py-1 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-bold truncate">
+                                  ⏳ Nenhum valor lançado
                                 </div>
                               )}
 
                               <button
                                 type="button"
                                 onClick={() => handleOpenConditionModal(f.order)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-[11px] font-extrabold transition cursor-pointer shadow-2xs"
+                                className="w-full inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white text-[10px] font-extrabold transition cursor-pointer"
                               >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Lançar Data e Valor Recebido</span>
+                                <Plus className="w-3 h-3 shrink-0" />
+                                <span className="truncate">Lançar Data e Valor</span>
                               </button>
                             </td>
 
                             {/* COLUNA 4: Recebido vs. Saldo Restante */}
-                            <td className="py-4 px-4 min-w-[210px]">
-                              <div className="space-y-1.5">
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="font-bold text-neutral-600">Já recebido:</span>
-                                  <span className="font-black text-emerald-700 text-sm">
+                            <td className="py-2.5 px-2.5">
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="font-bold text-neutral-600">Recebido:</span>
+                                  <span className="font-black text-emerald-700">
                                     {formatBRL(f.receivedGross)}
                                   </span>
                                 </div>
 
                                 {f.remainingBalance > 0.01 ? (
-                                  <div className="flex items-center justify-between text-xs pt-1 border-t border-neutral-100">
-                                    <span className="font-bold text-neutral-600">Saldo restante:</span>
-                                    <span className="font-black text-[#8B1E3F] text-sm">
+                                  <div className="flex items-center justify-between text-[11px] pt-0.5 border-t border-neutral-100">
+                                    <span className="font-bold text-neutral-600">Falta:</span>
+                                    <span className="font-black text-[#8B1E3F]">
                                       {formatBRL(f.remainingBalance)}
                                     </span>
                                   </div>
                                 ) : (
-                                  <div className="pt-1">
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-extrabold text-[11px]">
-                                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                                      QUITADO (Saldo R$ 0,00)
+                                  <div className="pt-0.5">
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 font-extrabold text-[10px]">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-700 shrink-0" />
+                                      <span>QUITADO (R$ 0,00)</span>
                                     </span>
                                   </div>
                                 )}
 
                                 {/* Barra simples de progresso */}
-                                <div className="w-full bg-neutral-200 h-2 rounded-full overflow-hidden mt-1">
+                                <div className="w-full bg-neutral-200 h-1.5 rounded-full overflow-hidden">
                                   <div
                                     className={`h-full rounded-full transition-all ${
                                       isFullySettled ? 'bg-emerald-600' : 'bg-[#8B1E3F]'
@@ -1955,26 +1897,26 @@ export const AdminPanel: React.FC = () => {
                             </td>
 
                             {/* COLUNA 5: Status ( Entregue ou Aguardando ) */}
-                            <td className="py-4 px-4">
-                              <div className="inline-flex rounded-xl bg-neutral-100 p-1 border border-neutral-200">
+                            <td className="py-2.5 px-2 text-center">
+                              <div className="inline-grid grid-cols-2 gap-1 rounded-lg bg-neutral-100 p-1 border border-neutral-200 w-full">
                                 <button
                                   type="button"
                                   onClick={() => updateOrderStatus(f.order.id, 'pendente')}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer flex items-center gap-1 ${
+                                  className={`px-1.5 py-1.5 rounded-md text-[10px] font-extrabold transition cursor-pointer flex items-center justify-center gap-0.5 ${
                                     !isEntregue
-                                      ? 'bg-amber-400 text-neutral-950 shadow-xs'
+                                      ? 'bg-amber-400 text-neutral-950 shadow-2xs'
                                       : 'text-neutral-500 hover:text-neutral-900'
                                   }`}
                                   title="Marcar como Aguardando Entrega"
                                 >
-                                  <span>⏳ Aguardando</span>
+                                  <span>⏳ Aguard.</span>
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => updateOrderStatus(f.order.id, 'entregue')}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer flex items-center gap-1 ${
+                                  className={`px-1.5 py-1.5 rounded-md text-[10px] font-extrabold transition cursor-pointer flex items-center justify-center gap-0.5 ${
                                     isEntregue
-                                      ? 'bg-emerald-600 text-white shadow-xs'
+                                      ? 'bg-emerald-600 text-white shadow-2xs'
                                       : 'text-neutral-500 hover:text-neutral-900'
                                   }`}
                                   title="Marcar como Entregue ao cliente"
@@ -1982,66 +1924,57 @@ export const AdminPanel: React.FC = () => {
                                   <span>✅ Entregue</span>
                                 </button>
                               </div>
-                              <div className="mt-1.5 text-[11px] font-semibold">
-                                {isEntregue ? (
-                                  <span className="text-emerald-700">
-                                    ✅ Produto entregue ao cliente
-                                  </span>
-                                ) : (
-                                  <span className="text-amber-800">
-                                    ⏳ Aguardando entrega (VasconcelosExpress)
-                                  </span>
-                                )}
-                              </div>
                             </td>
 
-                            {/* COLUNA 6: AÇÕES */}
-                            <td className="py-4 px-4 text-right">
-                              <div className="flex flex-col items-end gap-2">
+                            {/* COLUNA 6: AÇÕES (100% visível sem cortar) */}
+                            <td className="py-2.5 px-2.5">
+                              <div className="flex flex-col gap-1">
                                 {!isFullySettled ? (
                                   <button
                                     type="button"
                                     onClick={() => handleQuickSettleOrder(f)}
-                                    className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 shadow-2xs"
-                                    title="Quitar todo o saldo restante na data de hoje com 1 clique"
+                                    className="w-full px-2 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-extrabold transition cursor-pointer flex items-center justify-center gap-1"
+                                    title={`Quitar saldo restante de ${formatBRL(f.remainingBalance)} com 1 clique`}
                                   >
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    <span>Quitar Tudo ({formatBRL(f.remainingBalance)})</span>
+                                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">Quitar ({formatBRL(f.remainingBalance)})</span>
                                   </button>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] font-extrabold text-emerald-800">
-                                    <CheckCircle2 className="w-3.5 h-3.5" />
-                                    Compra Quitada
-                                  </span>
+                                  <div className="w-full px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-[10px] font-extrabold text-emerald-800 flex items-center justify-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3 shrink-0" />
+                                    <span>Quitado ✅</span>
+                                  </div>
                                 )}
 
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    generateOrderConditionsPdf({
-                                      order: f.order,
-                                      settledInstallments: f.settledInstallments,
-                                      customTermsNote: f.order.adminPaymentTerms,
-                                      firstDueDate: f.order.adminFirstDueDate,
-                                      paymentReceipts: f.receipts
-                                    })
-                                  }
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#8B1E3F] hover:bg-neutral-950 text-white text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap shadow-2xs"
-                                  title="Gerar PDF com valor da compra, datas recebidas e saldo restante"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  <span>Gerar PDF Condições</span>
-                                </button>
+                                <div className="grid grid-cols-2 gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      generateOrderConditionsPdf({
+                                        order: f.order,
+                                        settledInstallments: f.settledInstallments,
+                                        customTermsNote: f.order.adminPaymentTerms,
+                                        firstDueDate: f.order.adminFirstDueDate,
+                                        paymentReceipts: f.receipts
+                                      })
+                                    }
+                                    className="px-1.5 py-1.5 rounded-lg bg-[#8B1E3F] hover:bg-neutral-950 text-white text-[10px] font-extrabold transition cursor-pointer flex items-center justify-center gap-1"
+                                    title="Gerar PDF com as condições e saldo da compra"
+                                  >
+                                    <FileText className="w-3 h-3 shrink-0" />
+                                    <span>PDF</span>
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => handleSendDirectWhatsAppSummary(f)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-600 text-emerald-900 hover:text-white border border-emerald-300 text-[11px] font-extrabold transition cursor-pointer whitespace-nowrap"
-                                  title="Enviar resumo de valores e saldo direto para o WhatsApp do cliente"
-                                >
-                                  <MessageCircle className="w-3.5 h-3.5" />
-                                  <span>Enviar no WhatsApp</span>
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSendDirectWhatsAppSummary(f)}
+                                    className="px-1.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold transition cursor-pointer flex items-center justify-center gap-1"
+                                    title="Enviar resumo direto no WhatsApp do cliente"
+                                  >
+                                    <MessageCircle className="w-3 h-3 shrink-0" />
+                                    <span>Whats</span>
+                                  </button>
+                                </div>
                               </div>
                             </td>
                           </tr>
