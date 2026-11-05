@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Product, CartItem, Order, User, Review, Coupon, PushNotification, ShippingQuote, Address } from '../types';
+import { Product, CartItem, Order, User, Review, Coupon, PushNotification, ShippingQuote, Address, PaymentReceipt } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_ORDERS, INITIAL_REVIEWS, INITIAL_COUPONS, INITIAL_NOTIFICATIONS } from '../data/mockData';
 import {
   SUPABASE_TABLES,
@@ -110,6 +110,7 @@ interface StoreContextType {
       paymentStatus: Order['paymentStatus'];
       adminPaymentTerms?: string;
       adminFirstDueDate?: string;
+      paymentReceipts?: PaymentReceipt[];
     }
   ) => void;
 
@@ -1047,19 +1048,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       paymentStatus: Order['paymentStatus'];
       adminPaymentTerms?: string;
       adminFirstDueDate?: string;
+      paymentReceipts?: PaymentReceipt[];
     }
   ) => {
     setOrders(prev =>
       prev.map(o => {
         if (o.id === orderId) {
+          const receipts = conditions.paymentReceipts ?? o.paymentReceipts ?? [];
+          const totalReceived = receipts.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+          const autoPaid = totalReceived >= o.total - 0.01;
+          const finalPaymentStatus = autoPaid ? 'paid' : conditions.paymentStatus;
+
           const updated: Order = {
             ...o,
             paymentMethod: conditions.paymentMethod,
             installments: Math.max(1, conditions.installments),
-            paymentStatus: conditions.paymentStatus,
-            orderStatus: conditions.paymentStatus === 'paid' && o.orderStatus === 'pendente' ? 'pago' : o.orderStatus,
+            paymentStatus: finalPaymentStatus,
+            orderStatus: finalPaymentStatus === 'paid' && o.orderStatus === 'pendente' ? 'pago' : o.orderStatus,
             adminPaymentTerms: conditions.adminPaymentTerms,
-            adminFirstDueDate: conditions.adminFirstDueDate
+            adminFirstDueDate: conditions.adminFirstDueDate,
+            paymentReceipts: receipts
           };
           supabasePatch(SUPABASE_TABLES.orders, `id=eq.${encodeURIComponent(orderId)}`, {
             payment_method: updated.paymentMethod,
@@ -1069,7 +1077,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             shipping_method: {
               ...updated.shippingMethod,
               adminPaymentTerms: updated.adminPaymentTerms,
-              adminFirstDueDate: updated.adminFirstDueDate
+              adminFirstDueDate: updated.adminFirstDueDate,
+              paymentReceipts: updated.paymentReceipts || []
             }
           });
           return updated;

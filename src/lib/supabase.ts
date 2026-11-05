@@ -120,7 +120,8 @@ export function mapOrderToRow(o: Order, settledInstallments?: number) {
     shipping_method: {
       ...o.shippingMethod,
       adminPaymentTerms: o.adminPaymentTerms || undefined,
-      adminFirstDueDate: o.adminFirstDueDate || undefined
+      adminFirstDueDate: o.adminFirstDueDate || undefined,
+      paymentReceipts: o.paymentReceipts || []
     },
     items: o.items || [],
     subtotal: Number(o.subtotal),
@@ -170,7 +171,10 @@ export function mapRowToOrder(row: any): Order & { settledInstallments?: number 
     trackingCode: row.tracking_code || undefined,
     pixCopiaECola: row.pix_copia_e_cola || undefined,
     adminPaymentTerms: row.shipping_method?.adminPaymentTerms || undefined,
-    adminFirstDueDate: row.shipping_method?.adminFirstDueDate || undefined
+    adminFirstDueDate: row.shipping_method?.adminFirstDueDate || undefined,
+    paymentReceipts: Array.isArray(row.shipping_method?.paymentReceipts)
+      ? row.shipping_method.paymentReceipts
+      : undefined
   };
 }
 

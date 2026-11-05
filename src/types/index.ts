@@ -102,6 +102,14 @@ export interface OrderItem {
   image: string;
 }
 
+export interface PaymentReceipt {
+  id: string;
+  date: string;
+  amount: number;
+  method?: string;
+  note?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -132,6 +140,7 @@ export interface Order {
   pixCopiaECola?: string;
   adminPaymentTerms?: string;
   adminFirstDueDate?: string;
+  paymentReceipts?: PaymentReceipt[];
 }
 
 export interface Coupon {

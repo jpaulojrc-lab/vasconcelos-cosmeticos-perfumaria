@@ -1,4 +1,4 @@
-import { Order } from '../types';
+import { Order, PaymentReceipt } from '../types';
 import { formatBRL, formatDate } from './formatters';
 
 export interface AdminPaymentConditionInput {
@@ -9,26 +9,46 @@ export interface AdminPaymentConditionInput {
   pixKey?: string;
   adminEmail?: string;
   adminWhatsApp?: string;
+  paymentReceipts?: PaymentReceipt[];
+}
+
+function formatReceiptDate(dateStr: string): string {
+  if (!dateStr) return '-';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  return dateStr;
 }
 
 /**
  * Gera um documento PDF oficial da VASCONCELOS com os produtos selecionados,
- * entrega fixa VasconcelosExpress (R$ 0,00) e todas as condições de pagamento
- * estabelecidas pelo ADM (sandravasconcellossillva@gmail.com).
+ * entrega fixa VasconcelosExpress (R$ 0,00), histórico de datas e valores recebidos
+ * pelo ADM e cálculo automático do Saldo Restante da compra.
  */
 export function generateOrderConditionsPdf(input: AdminPaymentConditionInput) {
   const {
     order,
-    settledInstallments = 0,
     customTermsNote,
     firstDueDate,
     pixKey = order.pixCopiaECola || 'sandravasconcellossillva@gmail.com',
-    adminEmail = 'sandravasconcellossillva@gmail.com'
+    adminEmail = 'sandravasconcellossillva@gmail.com',
+    paymentReceipts = order.paymentReceipts || []
   } = input;
 
-  const totalInstallments = Math.max(1, order.installments || 1);
-  const isInstallment = totalInstallments > 1;
-  const installmentValue = order.total / totalInstallments;
+  const totalReceivedFromReceipts = paymentReceipts.reduce(
+    (sum, r) => sum + Number(r.amount || 0),
+    0
+  );
+  const totalReceived =
+    paymentReceipts.length > 0
+      ? totalReceivedFromReceipts
+      : order.paymentStatus === 'paid'
+        ? order.total
+        : 0;
+
+  const remainingBalance = Math.max(0, order.total - totalReceived);
+  const isFullyPaid = remainingBalance <= 0.01;
 
   const paymentMethodLabel =
     order.paymentMethod === 'pix'
@@ -40,55 +60,11 @@ export function generateOrderConditionsPdf(input: AdminPaymentConditionInput) {
   const termsDescription =
     customTermsNote ||
     order.adminPaymentTerms ||
-    (isInstallment
-      ? `Pagamento parcelado em ${totalInstallments}x de ${formatBRL(installmentValue)} sem juros (${paymentMethodLabel}), conforme aprovado pela Administração.`
-      : `Pagamento à vista em parcela única de ${formatBRL(order.total)} via ${paymentMethodLabel}.`);
+    (isFullyPaid
+      ? `Compra 100% quitada junto à Administração Vasconcelos.`
+      : `Controle de pagamento direto com a Administração Vasconcelos. Total pago até o momento: ${formatBRL(totalReceived)} | Saldo restante a pagar: ${formatBRL(remainingBalance)}.`);
 
   const dueInfo = firstDueDate || order.adminFirstDueDate || 'Conforme combinado com a Administração';
-
-  // Gera as linhas do cronograma de parcelas
-  const baseDate = new Date(order.createdAt || Date.now());
-  const installmentsRowsHtml = Array.from({ length: totalInstallments }).map((_, idx) => {
-    const parcelNumber = idx + 1;
-    const isPaid =
-      (order.paymentStatus === 'paid' && !isInstallment) ||
-      parcelNumber <= settledInstallments;
-
-    const parcelDate = new Date(baseDate);
-    parcelDate.setMonth(parcelDate.getMonth() + idx);
-    const dueLabel =
-      idx === 0 && firstDueDate
-        ? firstDueDate
-        : idx === 0 && !isInstallment
-          ? dueInfo
-          : parcelDate.toLocaleDateString('pt-BR');
-
-    return `
-      <tr>
-        <td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5; font-family: monospace; font-weight: 700;">
-          ${parcelNumber}ª / ${totalInstallments}
-        </td>
-        <td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">
-          ${paymentMethodLabel}
-        </td>
-        <td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">
-          ${dueLabel}
-        </td>
-        <td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5; font-weight: 700;">
-          ${formatBRL(installmentValue)}
-        </td>
-        <td style="padding: 8px 12px; border-bottom: 1px solid #e5e5e5;">
-          <span style="display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; ${
-            isPaid
-              ? 'background: #d1fae5; color: #065f46;'
-              : 'background: #fef3c7; color: #92400e;'
-          }">
-            ${isPaid ? 'Quitada' : 'A Vencer / Pendente'}
-          </span>
-        </td>
-      </tr>
-    `;
-  }).join('');
 
   const itemsRowsHtml = order.items
     .map(
@@ -111,50 +87,88 @@ export function generateOrderConditionsPdf(input: AdminPaymentConditionInput) {
     )
     .join('');
 
+  const receiptsRowsHtml =
+    paymentReceipts.length > 0
+      ? paymentReceipts
+          .map(
+            (r, idx) => `
+      <tr>
+        <td style="padding: 9px 12px; border-bottom: 1px solid #e5e5e5; font-family: monospace; font-weight: 700;">
+          #${idx + 1}
+        </td>
+        <td style="padding: 9px 12px; border-bottom: 1px solid #e5e5e5; font-weight: 600;">
+          ${formatReceiptDate(r.date)}
+        </td>
+        <td style="padding: 9px 12px; border-bottom: 1px solid #e5e5e5;">
+          ${r.method || paymentMethodLabel}${r.note ? ` — ${r.note}` : ''}
+        </td>
+        <td style="padding: 9px 12px; border-bottom: 1px solid #e5e5e5; text-align: right; font-weight: 700; color: #065f46;">
+          ${formatBRL(r.amount)}
+        </td>
+      </tr>
+    `
+          )
+          .join('')
+      : `
+      <tr>
+        <td colspan="4" style="padding: 14px; text-align: center; color: #666666; border-bottom: 1px solid #e5e5e5;">
+          ${
+            isFullyPaid
+              ? `Pagamento integral de ${formatBRL(order.total)} confirmado pela Administração.`
+              : 'Nenhum pagamento parcial lançado ainda. Saldo integral em aberto.'
+          }
+        </td>
+      </tr>
+    `;
+
   const html = `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Pedido ${order.orderNumber} — Condições de Pagamento VASCONCELOS</title>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pedido ${order.orderNumber} — Extrato & Saldo VASCONCELOS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; }
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       color: #111111;
-      background: #ffffff;
+      background: #F7F6F2;
       margin: 0;
-      padding: 32px;
+      padding: 16px;
       font-size: 12px;
       line-height: 1.5;
     }
     .page {
       max-width: 780px;
       margin: 0 auto;
+      background: #ffffff;
       border: 1px solid #d4d4d4;
-      padding: 36px;
-      border-radius: 12px;
+      padding: 28px;
+      border-radius: 14px;
     }
     .header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 12px;
       border-bottom: 2px solid #111111;
-      padding-bottom: 20px;
-      margin-bottom: 24px;
+      padding-bottom: 18px;
+      margin-bottom: 20px;
     }
     .brand-title {
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 32px;
+      font-size: 28px;
       font-weight: 600;
-      letter-spacing: 0.24em;
+      letter-spacing: 0.22em;
       margin: 0;
     }
     .brand-sub {
       font-size: 9px;
       text-transform: uppercase;
-      letter-spacing: 0.28em;
+      letter-spacing: 0.26em;
       color: #666666;
       margin-top: 4px;
     }
@@ -166,42 +180,48 @@ export function generateOrderConditionsPdf(input: AdminPaymentConditionInput) {
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.14em;
-      border-radius: 4px;
+      border-radius: 6px;
       display: inline-block;
     }
     .section-title {
       font-size: 11px;
-      font-weight: 700;
+      font-weight: 800;
       text-transform: uppercase;
-      letter-spacing: 0.16em;
+      letter-spacing: 0.14em;
       color: #111111;
-      margin: 24px 0 10px;
+      margin: 22px 0 10px;
       padding-bottom: 6px;
       border-bottom: 1px solid #e5e5e5;
     }
     .grid-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
+      gap: 14px;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
     }
     .card {
       background: #F7F6F2;
       border: 1px solid #e5e5e5;
-      border-radius: 8px;
-      padding: 14px 16px;
+      border-radius: 10px;
+      padding: 14px;
     }
     .label {
       font-size: 10px;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.08em;
       color: #666666;
-      font-weight: 600;
+      font-weight: 700;
     }
     .value {
-      font-size: 13px;
-      font-weight: 700;
+      font-size: 14px;
+      font-weight: 800;
       color: #111111;
-      margin-top: 2px;
+      margin-top: 3px;
     }
     table {
       width: 100%;
@@ -212,49 +232,56 @@ export function generateOrderConditionsPdf(input: AdminPaymentConditionInput) {
     th {
       background: #F7F6F2;
       text-align: left;
-      padding: 10px 12px;
+      padding: 9px 12px;
       font-size: 10px;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.08em;
       color: #555555;
       border-bottom: 1px solid #d4d4d4;
     }
-    .conditions-box {
+    .balance-banner {
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 14px;
+      border: 2px solid #111111;
       background: #fdf8f9;
-      border: 1.5px solid #8B1E3F;
-      border-radius: 10px;
-      padding: 18px 20px;
-      margin-top: 16px;
     }
     .no-print-bar {
       max-width: 780px;
-      margin: 0 auto 16px;
+      margin: 0 auto 12px;
       display: flex;
-      justify-content: flex-end;
+      justify-content: space-between;
+      align-items: center;
       gap: 10px;
     }
     .btn {
       background: #111111;
       color: #ffffff;
       border: none;
-      padding: 10px 18px;
-      border-radius: 6px;
+      padding: 11px 18px;
+      border-radius: 8px;
       font-size: 12px;
       font-weight: 700;
       cursor: pointer;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.08em;
+      width: 100%;
+    }
+    @media (max-width: 600px) {
+      body { padding: 8px; }
+      .page { padding: 16px; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
     }
     @media print {
-      body { padding: 0; }
-      .page { border: none; padding: 16px; }
+      body { padding: 0; background: #ffffff; }
+      .page { border: none; padding: 12px; }
       .no-print-bar { display: none !important; }
     }
   </style>
 </head>
 <body>
   <div class="no-print-bar">
-    <button class="btn" onclick="window.print()">Salvar como PDF / Imprimir</button>
+    <button class="btn" onclick="window.print()">📄 Salvar em PDF / Compartilhar Comprovante</button>
   </div>
 
   <div class="page">
@@ -262,48 +289,88 @@ export function generateOrderConditionsPdf(input: AdminPaymentConditionInput) {
       <div>
         <h1 class="brand-title">VASCONCELOS</h1>
         <div class="brand-sub">Cosméticos & Alta Perfumaria</div>
-        <div style="margin-top: 8px; font-size: 11px; color: #555;">
-          Administração & Consultoria: <strong>${adminEmail}</strong>
+        <div style="margin-top: 6px; font-size: 11px; color: #555;">
+          Administração: <strong>${adminEmail}</strong>
         </div>
       </div>
-      <div style="text-align: right;">
-        <span class="doc-badge">Documento de Pedido & Condições</span>
-        <div style="margin-top: 8px; font-family: monospace; font-size: 15px; font-weight: 700;">
+      <div>
+        <span class="doc-badge">Resumo de Compra & Controle de Saldo</span>
+        <div style="margin-top: 6px; font-family: monospace; font-size: 14px; font-weight: 800;">
           Pedido Nº ${order.orderNumber}
         </div>
         <div style="font-size: 11px; color: #666;">
-          Emitido em: ${formatDate(order.createdAt)}
+          Data do Pedido: ${formatDate(order.createdAt)}
         </div>
       </div>
     </div>
 
     <div class="grid-2">
       <div class="card">
-        <div class="label">Dados do Cliente</div>
+        <div class="label">Cliente</div>
         <div class="value">${order.customer.name}</div>
-        <div style="margin-top: 6px; font-size: 12px; color: #333;">
-          <strong>WhatsApp:</strong> ${order.customer.phone || 'Não informado'}
+        <div style="margin-top: 4px; font-size: 12px; color: #333;">
+          <strong>Celular / WhatsApp:</strong> ${order.customer.phone || 'Não informado'}
         </div>
-        ${
-          order.shippingAddress?.logradouro && order.shippingAddress.logradouro !== 'Entrega Combinada via WhatsApp'
-            ? `<div style="margin-top: 4px; font-size: 11px; color: #555;">Obs./Local: ${order.shippingAddress.logradouro}</div>`
-            : ''
-        }
       </div>
 
       <div class="card">
         <div class="label">Modalidade de Entrega</div>
-        <div class="value" style="color: #065f46;">VasconcelosExpress</div>
-        <div style="margin-top: 6px; font-size: 12px; color: #333;">
-          <strong>Custo de Entrega:</strong> <span style="color: #065f46; font-weight: 700;">GRÁTIS (Sem custos adicionais)</span>
-        </div>
-        <div style="margin-top: 4px; font-size: 11px; color: #555;">
-          Código de Rastreio / Protocolo: <strong>${order.trackingCode || 'VSC-EXPRESS'}</strong>
+        <div class="value" style="color: #065f46;">VasconcelosExpress (GRÁTIS)</div>
+        <div style="margin-top: 4px; font-size: 11px; color: #444;">
+          Sem custos adicionais • Protocolo: <strong>${order.trackingCode || 'VSC-EXPRESS'}</strong>
         </div>
       </div>
     </div>
 
-    <div class="section-title">1. Produtos Selecionados</div>
+    <div class="section-title">1. Resumo do Saldo da Compra (Controle ADM)</div>
+    <div class="grid-3">
+      <div class="card" style="background: #ffffff; border: 1.5px solid #d4d4d4;">
+        <div class="label">Valor Total da Compra</div>
+        <div class="value" style="font-size: 18px;">${formatBRL(order.total)}</div>
+        <div style="font-size: 10px; color: #666; margin-top: 2px;">Frete Grátis Incluso</div>
+      </div>
+
+      <div class="card" style="background: #ecfdf5; border: 1.5px solid #6ee7b7;">
+        <div class="label" style="color: #065f46;">Total Já Recebido</div>
+        <div class="value" style="font-size: 18px; color: #065f46;">${formatBRL(totalReceived)}</div>
+        <div style="font-size: 10px; color: #047857; margin-top: 2px;">
+          ${paymentReceipts.length} ${paymentReceipts.length === 1 ? 'pagamento registrado' : 'pagamentos registrados'}
+        </div>
+      </div>
+
+      <div class="card" style="${
+        isFullyPaid
+          ? 'background: #ecfdf5; border: 1.5px solid #10b981;'
+          : 'background: #fffbeb; border: 1.5px solid #f59e0b;'
+      }">
+        <div class="label" style="color: ${isFullyPaid ? '#065f46' : '#92400e'};">
+          Saldo Restante a Pagar
+        </div>
+        <div class="value" style="font-size: 18px; color: ${isFullyPaid ? '#065f46' : '#b45309'};">
+          ${isFullyPaid ? 'R$ 0,00 (QUITADO)' : formatBRL(remainingBalance)}
+        </div>
+        <div style="font-size: 10px; color: ${isFullyPaid ? '#047857' : '#92400e'}; margin-top: 2px;">
+          ${isFullyPaid ? 'Compra 100% paga ✅' : `Próximo vencimento/previsão: ${dueInfo}`}
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">2. Histórico de Pagamentos Recebidos (Data & Valor)</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 60px;">Recibo</th>
+          <th>Data que Recebeu</th>
+          <th>Forma / Observação</th>
+          <th style="text-align: right;">Valor Recebido</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${receiptsRowsHtml}
+      </tbody>
+    </table>
+
+    <div class="section-title">3. Produtos da Compra</div>
     <table>
       <thead>
         <tr>
@@ -318,86 +385,26 @@ export function generateOrderConditionsPdf(input: AdminPaymentConditionInput) {
       </tbody>
     </table>
 
-    <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
-      <div style="width: 280px; background: #F7F6F2; padding: 12px 16px; border-radius: 8px; border: 1px solid #e5e5e5;">
-        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
-          <span>Subtotal Produtos:</span>
-          <strong>${formatBRL(order.subtotal)}</strong>
-        </div>
-        ${
-          order.discount > 0
-            ? `<div style="display: flex; justify-content: space-between; font-size: 12px; color: #065f46; margin-bottom: 4px;">
-                <span>Desconto Aplicado:</span>
-                <strong>- ${formatBRL(order.discount)}</strong>
-              </div>`
-            : ''
-        }
-        <div style="display: flex; justify-content: space-between; font-size: 12px; color: #065f46; margin-bottom: 6px;">
-          <span>Entrega (VasconcelosExpress):</span>
-          <strong>R$ 0,00 (Grátis)</strong>
-        </div>
-        <div style="display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; border-top: 1px solid #d4d4d4; padding-top: 6px;">
-          <span>Total do Pedido:</span>
-          <span>${formatBRL(order.total)}</span>
-        </div>
+    <div class="balance-banner">
+      <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #8B1E3F; letter-spacing: 0.08em;">
+        Observações & Condições da Administração
+      </div>
+      <div style="margin-top: 6px; font-size: 12px; color: #222;">
+        ${termsDescription}
+      </div>
+      <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed #d4d4d4; font-size: 11px;">
+        <strong>Chave PIX / Contato Oficial:</strong>
+        <span style="font-family: monospace; margin-left: 6px;">${pixKey}</span>
       </div>
     </div>
 
-    <div class="section-title">2. Condições de Pagamento Estabelecidas pela Administração</div>
-    <div class="conditions-box">
-      <div class="grid-2">
-        <div>
-          <div class="label" style="color: #8B1E3F;">Modalidade Aprovada pelo ADM</div>
-          <div class="value" style="font-size: 15px; color: #8B1E3F;">
-            ${isInstallment ? `Parcelado em ${totalInstallments}x de ${formatBRL(installmentValue)}` : `À Vista — ${formatBRL(order.total)}`}
-          </div>
-          <div style="font-size: 11px; color: #444; margin-top: 4px;">
-            Meio de pagamento: <strong>${paymentMethodLabel}</strong>
-          </div>
-        </div>
-        <div>
-          <div class="label" style="color: #8B1E3F;">Vencimento / Condição Inicial</div>
-          <div class="value">${dueInfo}</div>
-          <div style="font-size: 11px; color: #444; margin-top: 4px;">
-            Status Atual: <strong>${order.paymentStatus === 'paid' ? 'PAGAMENTO CONFIRMADO' : 'AGUARDANDO QUITAÇÃO'}</strong>
-          </div>
-        </div>
-      </div>
-
-      <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed #e5b8c5; font-size: 12px; color: #222;">
-        <strong>Termos estabelecidos pelo ADM:</strong> ${termsDescription}
-      </div>
-
-      <div style="margin-top: 10px; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 6px; padding: 8px 12px; font-size: 11px;">
-        <strong>Chave PIX / Dados para Pagamento:</strong>
-        <span style="font-family: monospace; word-break: break-all; margin-left: 6px;">${pixKey}</span>
-      </div>
-    </div>
-
-    <div class="section-title">3. Cronograma de Parcelas / Pagamento</div>
-    <table>
-      <thead>
-        <tr>
-          <th>Parcela</th>
-          <th>Forma</th>
-          <th>Vencimento / Previsão</th>
-          <th>Valor</th>
-          <th>Situação</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${installmentsRowsHtml}
-      </tbody>
-    </table>
-
-    <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e5e5; display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: #777;">
+    <div style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #e5e5e5; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 10px; color: #777;">
       <div>
         <strong>VASCONCELOS • Cosméticos & Alta Perfumaria</strong><br />
-        Condições validadas por ${adminEmail} • Entrega exclusiva VasconcelosExpress sem custo adicional.
+        Controle financeiro emitido por ${adminEmail}
       </div>
-      <div style="text-align: right;">
-        Autenticação do Pedido:<br />
-        <strong style="font-family: monospace; color: #111;">${order.id.toUpperCase()}</strong>
+      <div>
+        Código do Pedido: <strong style="font-family: monospace; color: #111;">${order.orderNumber}</strong>
       </div>
     </div>
   </div>
@@ -420,4 +427,3 @@ export function generateOrderConditionsPdf(input: AdminPaymentConditionInput) {
     printWin.document.close();
   }
 }
-

@@ -36,11 +36,20 @@ import {
   FileSpreadsheet
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { Product, ProductCategory, Order, OrderStatus, Coupon } from '../types';
+import { Product, ProductCategory, Order, OrderStatus, Coupon, PaymentReceipt } from '../types';
 import { formatBRL, formatDate } from '../utils/formatters';
 import { AdminLogin } from './AdminLogin';
 import { SUPABASE_TABLES, supabasePatch, supabaseUpsert } from '../lib/supabase';
 import { generateOrderConditionsPdf } from '../utils/pdfGenerator';
+
+function formatReceiptDateBr(dateStr: string): string {
+  if (!dateStr) return '-';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  return dateStr;
+}
 
 export const AdminPanel: React.FC = () => {
   const {
@@ -68,24 +77,68 @@ export const AdminPanel: React.FC = () => {
   const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
   const [supabaseSyncMsg, setSupabaseSyncMsg] = useState<string | null>(null);
 
-  // Modal de Condições de Pagamento do ADM & Geração de PDF
+  // Modal de Condições de Pagamento do ADM (Controle por Data + Valor Recebido e Saldo Automático)
   const [conditionModalOrder, setConditionModalOrder] = useState<Order | null>(null);
   const [condMethod, setCondMethod] = useState<Order['paymentMethod']>('pix');
   const [condInstallments, setCondInstallments] = useState<number>(1);
   const [condStatus, setCondStatus] = useState<Order['paymentStatus']>('pending');
   const [condDueDate, setCondDueDate] = useState<string>('Imediato');
   const [condNotes, setCondNotes] = useState<string>('');
+  const [condReceipts, setCondReceipts] = useState<PaymentReceipt[]>([]);
+  const [newReceiptDate, setNewReceiptDate] = useState<string>(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [newReceiptAmount, setNewReceiptAmount] = useState<string>('');
+  const [newReceiptMethod, setNewReceiptMethod] = useState<string>('PIX');
 
   const handleOpenConditionModal = (order: Order) => {
     setConditionModalOrder(order);
     setCondMethod(order.paymentMethod || 'pix');
     setCondInstallments(Math.max(1, order.installments || 1));
     setCondStatus(order.paymentStatus || 'pending');
-    setCondDueDate(order.adminFirstDueDate || 'Imediato / A Combinar');
+    setCondDueDate(order.adminFirstDueDate || 'Conforme combinado');
     setCondNotes(
       order.adminPaymentTerms ||
         'Entrega exclusiva via VasconcelosExpress sem custos adicionais (Frete Grátis).'
     );
+    const existingReceipts = order.paymentReceipts || [];
+    setCondReceipts(existingReceipts);
+    setNewReceiptDate(new Date().toISOString().slice(0, 10));
+    setNewReceiptAmount('');
+    setNewReceiptMethod('PIX');
+  };
+
+  const handleAddReceiptToModal = () => {
+    if (!conditionModalOrder) return;
+    const parsedAmount = parseFloat(newReceiptAmount.replace(',', '.'));
+    if (isNaN(parsedAmount) || parsedAmount <= 0) return;
+
+    const entry: PaymentReceipt = {
+      id: `rec-${Date.now()}`,
+      date: newReceiptDate || new Date().toISOString().slice(0, 10),
+      amount: parsedAmount,
+      method: newReceiptMethod || 'PIX'
+    };
+
+    const nextReceipts = [...condReceipts, entry];
+    setCondReceipts(nextReceipts);
+    setNewReceiptAmount('');
+
+    const totalPaid = nextReceipts.reduce((s, r) => s + r.amount, 0);
+    if (totalPaid >= conditionModalOrder.total - 0.01) {
+      setCondStatus('paid');
+    }
+  };
+
+  const handleRemoveReceiptFromModal = (id: string) => {
+    const nextReceipts = condReceipts.filter((r) => r.id !== id);
+    setCondReceipts(nextReceipts);
+    if (conditionModalOrder) {
+      const totalPaid = nextReceipts.reduce((s, r) => s + r.amount, 0);
+      if (totalPaid < conditionModalOrder.total - 0.01) {
+        setCondStatus('pending');
+      }
+    }
   };
 
   const [activeTab, setActiveTab] = useState<'relatorios' | 'estoque' | 'cupons' | 'cobranca'>('relatorios');
@@ -932,15 +985,36 @@ export const AdminPanel: React.FC = () => {
       }
     }
 
+    const receipts = order.paymentReceipts || [];
+    const hasCustomReceipts = receipts.length > 0;
+    const receiptsTotal = receipts.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+
     const remainingInstallments = Math.max(0, totalInstallments - settledInstallments);
-    const receivedGross = settledInstallments * installmentValue;
-    const receivedNet = totalInstallments > 0 ? (settledInstallments / totalInstallments) * netTotal : 0;
-    const futureReceivableGross =
-      order.paymentStatus === 'paid' ? remainingInstallments * installmentValue : 0;
-    const pendingPaymentGross = order.paymentStatus === 'pending' ? order.total : 0;
+    const receivedGross = hasCustomReceipts
+      ? Math.min(order.total, receiptsTotal)
+      : settledInstallments * installmentValue;
+    const receivedNet = hasCustomReceipts
+      ? Math.max(0, receivedGross - (receivedGross / Math.max(1, order.total)) * feeAmount)
+      : totalInstallments > 0
+        ? (settledInstallments / totalInstallments) * netTotal
+        : 0;
+    const remainingBalance = Math.max(0, order.total - receivedGross);
+    const futureReceivableGross = hasCustomReceipts
+      ? remainingBalance
+      : order.paymentStatus === 'paid'
+        ? remainingInstallments * installmentValue
+        : 0;
+    const pendingPaymentGross = hasCustomReceipts
+      ? 0
+      : order.paymentStatus === 'pending'
+        ? order.total
+        : 0;
 
     return {
       order,
+      receipts,
+      hasCustomReceipts,
+      remainingBalance,
       totalInstallments,
       isInstallment,
       isCash,
@@ -1492,15 +1566,229 @@ export const AdminPanel: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto border border-neutral-200 rounded-xl">
+                {/* =========================================================
+                    VISÃO CELULAR (MOBILE-FIRST CARDS PARA O ADM) - lg:hidden
+                   ========================================================= */}
+                <div className="lg:hidden space-y-4">
+                  {filteredFinancialOrders.map((f) => {
+                    const statusColors: Record<OrderStatus, string> = {
+                      pendente: 'bg-amber-100 text-amber-800',
+                      pago: 'bg-blue-100 text-blue-800',
+                      separacao: 'bg-purple-100 text-purple-800',
+                      enviado: 'bg-indigo-100 text-indigo-800',
+                      entregue: 'bg-emerald-100 text-emerald-800'
+                    };
+                    const isQuitado = f.remainingBalance <= 0.01 && f.receivedGross > 0;
+
+                    return (
+                      <div
+                        key={`mob-${f.order.id}`}
+                        className="p-4 rounded-2xl bg-[#F7F6F2] border border-neutral-300 shadow-xs space-y-3.5"
+                      >
+                        {/* Topo do Card: Número do Pedido, Data e Status */}
+                        <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-neutral-200">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-extrabold text-sm text-neutral-950">
+                                {f.order.orderNumber}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                  isQuitado
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : f.receivedGross > 0
+                                      ? 'bg-indigo-100 text-indigo-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                }`}
+                              >
+                                {isQuitado
+                                  ? 'Quitado ✅'
+                                  : f.receivedGross > 0
+                                    ? 'Pago Parcial'
+                                    : 'Saldo em Aberto'}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-neutral-500">
+                              Data do pedido: {formatDate(f.order.createdAt)}
+                            </span>
+                          </div>
+
+                          <select
+                            value={f.order.orderStatus}
+                            onChange={(e) =>
+                              updateOrderStatus(f.order.id, e.target.value as OrderStatus)
+                            }
+                            className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold border border-neutral-300 ${statusColors[f.order.orderStatus]}`}
+                          >
+                            <option value="pendente">Pendente</option>
+                            <option value="pago">Pago</option>
+                            <option value="separacao">Separação</option>
+                            <option value="enviado">Enviado</option>
+                            <option value="entregue">Entregue</option>
+                          </select>
+                        </div>
+
+                        {/* Cliente & Produtos */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-extrabold text-neutral-950">
+                              {f.order.customer.name}
+                            </p>
+                            {f.order.customer.phone && (
+                              <span className="text-xs font-mono font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                📱 {f.order.customer.phone}
+                              </span>
+                            )}
+                          </div>
+                          <div className="bg-white rounded-xl p-2.5 border border-neutral-200 space-y-1">
+                            {f.order.items.map((it, idx) => (
+                              <p key={idx} className="text-xs text-neutral-800 flex justify-between">
+                                <span className="truncate pr-2">
+                                  <strong>{it.quantity}x</strong> {it.name}
+                                </span>
+                                <span className="font-bold shrink-0">
+                                  {formatBRL(it.price * it.quantity)}
+                                </span>
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* RESUMO SIMPLES DE SALDO PARA O ADM NO CELULAR */}
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          <div className="p-2.5 rounded-xl bg-white border border-neutral-200">
+                            <span className="text-[9px] font-bold uppercase text-neutral-500 block">
+                              Total Compra
+                            </span>
+                            <p className="text-xs sm:text-sm font-extrabold text-neutral-950 mt-0.5">
+                              {formatBRL(f.order.total)}
+                            </p>
+                          </div>
+
+                          <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                            <span className="text-[9px] font-bold uppercase text-emerald-800 block">
+                              Já Recebido
+                            </span>
+                            <p className="text-xs sm:text-sm font-extrabold text-emerald-700 mt-0.5">
+                              {formatBRL(f.receivedGross)}
+                            </p>
+                          </div>
+
+                          <div
+                            className={`p-2.5 rounded-xl border ${
+                              isQuitado
+                                ? 'bg-emerald-50 border-emerald-200'
+                                : 'bg-amber-50 border-amber-300'
+                            }`}
+                          >
+                            <span
+                              className={`text-[9px] font-bold uppercase block ${
+                                isQuitado ? 'text-emerald-800' : 'text-amber-900'
+                              }`}
+                            >
+                              Saldo a Receber
+                            </span>
+                            <p
+                              className={`text-xs sm:text-sm font-extrabold mt-0.5 ${
+                                isQuitado ? 'text-emerald-700' : 'text-[#8B1E3F]'
+                              }`}
+                            >
+                              {isQuitado ? 'R$ 0,00' : formatBRL(f.remainingBalance)}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Histórico de Datas e Valores Recebidos pelo ADM */}
+                        {f.receipts.length > 0 && (
+                          <div className="bg-white rounded-xl p-2.5 border border-emerald-200 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
+                              Recebimentos Lançados pelo ADM:
+                            </span>
+                            {f.receipts.map((r) => (
+                              <div
+                                key={r.id}
+                                className="flex items-center justify-between text-xs text-neutral-800"
+                              >
+                                <span>
+                                  📅 <strong>{formatReceiptDateBr(r.date)}</strong> ({r.method || 'PIX'})
+                                </span>
+                                <span className="font-extrabold text-emerald-700">
+                                  + {formatBRL(r.amount)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Botões Grandes para o ADM usar no Celular */}
+                        <div className="space-y-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenConditionModal(f.order)}
+                            className="w-full py-3 px-4 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-extrabold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                            <span>Lançar Data e Valor Recebido / Ver Saldo</span>
+                          </button>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                generateOrderConditionsPdf({
+                                  order: f.order,
+                                  settledInstallments: f.settledInstallments,
+                                  customTermsNote: f.order.adminPaymentTerms,
+                                  firstDueDate: f.order.adminFirstDueDate,
+                                  paymentReceipts: f.receipts
+                                })
+                              }
+                              className="py-2.5 px-3 rounded-xl bg-[#8B1E3F] text-white text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>Gerar PDF c/ Saldo</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSelectBillingCustomer({
+                                  id: `ord-${f.order.id}`,
+                                  name: f.order.customer.name,
+                                  email: f.order.customer.email,
+                                  phone: f.order.customer.phone,
+                                  orderNumber: f.order.orderNumber,
+                                  amount: f.remainingBalance > 0 ? f.remainingBalance : f.order.total,
+                                  paymentMethod: f.order.paymentMethod,
+                                  pixKey: f.order.pixCopiaECola || 'pix@vasconcelosbeauty.com.br',
+                                  orderStatus: f.order.orderStatus
+                                });
+                                setActiveTab('cobranca');
+                              }}
+                              className="py-2.5 px-3 rounded-xl bg-emerald-700 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              <span>Cobrar Saldo</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* =========================================================
+                    VISÃO COMPUTADOR (TABELA WEB COMPLETA) - hidden lg:block
+                   ========================================================= */}
+                <div className="hidden lg:block overflow-x-auto border border-neutral-200 rounded-xl">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-neutral-50 text-neutral-600 font-bold uppercase tracking-wider border-b border-neutral-200">
                       <tr>
                         <th className="py-3 px-4">Pedido / Cliente / Itens</th>
-                        <th className="py-3 px-4">Modalidade & Plano</th>
+                        <th className="py-3 px-4">Datas & Valores Recebidos (ADM)</th>
                         <th className="py-3 px-4">Controle de Parcelas</th>
-                        <th className="py-3 px-4">Bruto / Líquido</th>
-                        <th className="py-3 px-4">Caixa vs. A Receber</th>
+                        <th className="py-3 px-4">Valor da Compra</th>
+                        <th className="py-3 px-4">Recebido vs. Saldo Restante</th>
                         <th className="py-3 px-4">Logística & Rastreio</th>
                         <th className="py-3 px-4 text-right">Ações</th>
                       </tr>
@@ -1508,7 +1796,7 @@ export const AdminPanel: React.FC = () => {
                     <tbody className="divide-y divide-neutral-200">
                       {filteredFinancialOrders.map((f) => {
                         const isFullySettled =
-                          f.order.paymentStatus === 'paid' && f.settledInstallments >= f.totalInstallments;
+                          f.remainingBalance <= 0.01 && f.receivedGross > 0;
                         const statusColors: Record<OrderStatus, string> = {
                           pendente: 'bg-amber-100 text-amber-800',
                           pago: 'bg-blue-100 text-blue-800',
@@ -1527,7 +1815,7 @@ export const AdminPanel: React.FC = () => {
                               </div>
                               <div className="font-semibold text-neutral-900 mt-0.5">{f.order.customer.name}</div>
                               <div className="text-[10px] text-neutral-500">
-                                {f.order.customer.email} • {f.order.shippingAddress.localidade}/{f.order.shippingAddress.uf}
+                                {f.order.customer.phone || f.order.customer.email}
                               </div>
                               <div className="mt-1.5 pt-1.5 border-t border-neutral-100 space-y-0.5">
                                 {f.order.items.map((it, idx) => (
@@ -1538,41 +1826,75 @@ export const AdminPanel: React.FC = () => {
                               </div>
                             </td>
 
-                            {/* Modalidade & Plano (Definido pelo ADM) */}
+                            {/* Datas & Valores Recebidos pelo ADM */}
                             <td className="py-3.5 px-4">
-                              {f.isCash ? (
+                              {f.receipts.length > 0 ? (
+                                <div className="space-y-1">
+                                  {f.receipts.map((r) => (
+                                    <div
+                                      key={r.id}
+                                      className="flex items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded px-2 py-1 text-[11px]"
+                                    >
+                                      <span className="font-semibold text-neutral-800">
+                                        📅 {formatReceiptDateBr(r.date)}
+                                      </span>
+                                      <span className="font-extrabold text-emerald-700">
+                                        {formatBRL(r.amount)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : f.isCash ? (
                                 <div className="space-y-1">
                                   <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-[10px] font-extrabold uppercase tracking-wider">
                                     À Vista • {f.order.paymentMethod === 'credit_card' ? 'Cartão 1x' : f.order.paymentMethod === 'boleto' ? 'Boleto' : 'PIX'}
                                   </span>
                                   <div className="text-[11px] text-neutral-600 font-semibold">
-                                    Parcela Única de {formatBRL(f.order.total)}
+                                    Valor: {formatBRL(f.order.total)}
                                   </div>
                                 </div>
                               ) : (
                                 <div className="space-y-1">
                                   <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 text-[10px] font-extrabold uppercase tracking-wider">
-                                    Parcelado • {f.totalInstallments}x ({f.order.paymentMethod === 'credit_card' ? 'Cartão' : f.order.paymentMethod.toUpperCase()})
+                                    Parcelado • {f.totalInstallments}x
                                   </span>
                                   <div className="font-bold text-indigo-950">
                                     {f.totalInstallments}x de {formatBRL(f.installmentValue)}
                                   </div>
-                                  <span className="block text-[10px] text-neutral-400">Condição aprovada pelo ADM</span>
                                 </div>
                               )}
                               <button
                                 type="button"
                                 onClick={() => handleOpenConditionModal(f.order)}
-                                className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-bold text-[#8B1E3F] hover:underline cursor-pointer"
+                                className="mt-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white text-[10px] font-bold transition cursor-pointer"
                               >
-                                <Edit3 className="w-3 h-3" />
-                                <span>Definir Condição (ADM)</span>
+                                <Plus className="w-3 h-3" />
+                                <span>Lançar Data e Valor Recebido</span>
                               </button>
                             </td>
 
                             {/* Controle de Parcelas Recebidas */}
                             <td className="py-3.5 px-4">
-                              {f.order.paymentStatus === 'pending' ? (
+                              {isFullySettled ? (
+                                <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Compra Quitada
+                                </span>
+                              ) : f.hasCustomReceipts ? (
+                                <div className="space-y-1">
+                                  <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 font-bold text-[10px] uppercase">
+                                    {f.receipts.length} {f.receipts.length === 1 ? 'Recebimento' : 'Recebimentos'}
+                                  </span>
+                                  <div className="w-28 bg-neutral-200 h-1.5 rounded-full overflow-hidden">
+                                    <div
+                                      className="bg-emerald-600 h-full rounded-full transition-all"
+                                      style={{
+                                        width: `${Math.min(100, Math.round((f.receivedGross / Math.max(1, f.order.total)) * 100))}%`
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              ) : f.order.paymentStatus === 'pending' ? (
                                 <span className="px-2 py-1 rounded bg-amber-100 text-amber-900 font-bold text-[10px] uppercase">
                                   Aguardando Pagamento
                                 </span>
@@ -1633,34 +1955,29 @@ export const AdminPanel: React.FC = () => {
                               )}
                             </td>
 
-                            {/* Bruto / Líquido */}
+                            {/* Valor da Compra */}
                             <td className="py-3.5 px-4">
                               <div className="font-extrabold text-neutral-950">
-                                Bruto: {formatBRL(f.order.total)}
+                                Total: {formatBRL(f.order.total)}
                               </div>
                               <div className="text-[11px] text-emerald-700 font-semibold">
                                 Líquido: {formatBRL(f.netTotal)}
                               </div>
-                              <div className="text-[10px] text-neutral-400">
-                                Taxa: -{formatBRL(f.feeAmount)}
-                              </div>
                             </td>
 
-                            {/* Já Recebido vs. Falta Entrar */}
+                            {/* Já Recebido vs. Saldo Restante */}
                             <td className="py-3.5 px-4">
                               <div className="text-emerald-700 font-bold">
-                                Em caixa: {formatBRL(f.receivedGross)}
+                                Já recebido: {formatBRL(f.receivedGross)}
                               </div>
-                              {f.futureReceivableGross > 0 ? (
-                                <div className="text-indigo-700 font-semibold text-[11px]">
-                                  A receber: {formatBRL(f.futureReceivableGross)} ({f.remainingInstallments}x)
-                                </div>
-                              ) : f.pendingPaymentGross > 0 ? (
-                                <div className="text-amber-700 font-semibold text-[11px]">
-                                  Pendente: {formatBRL(f.pendingPaymentGross)}
+                              {f.remainingBalance > 0.01 ? (
+                                <div className="text-[#8B1E3F] font-extrabold text-[11px] mt-0.5">
+                                  Saldo restante: {formatBRL(f.remainingBalance)}
                                 </div>
                               ) : (
-                                <div className="text-neutral-400 text-[11px]">100% quitado</div>
+                                <div className="text-emerald-700 font-bold text-[11px] mt-0.5">
+                                  Saldo R$ 0,00 (Quitado ✅)
+                                </div>
                               )}
                             </td>
 
@@ -3378,207 +3695,438 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: DEFINIR CONDIÇÃO DE PAGAMENTO PELO ADM & GERAR PDF */}
-      {conditionModalOrder && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="relative bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 border border-neutral-200">
-            <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8B1E3F] block">
-                  Administração VASCONCELOS
-                </span>
-                <h3 className="text-lg font-bold text-neutral-950">
-                  Condições de Pagamento & Emissão de PDF
-                </h3>
-                <p className="text-xs text-neutral-500">
-                  Pedido <strong>{conditionModalOrder.orderNumber}</strong> • Cliente: <strong>{conditionModalOrder.customer.name}</strong> ({formatBRL(conditionModalOrder.total)})
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setConditionModalOrder(null)}
-                className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-900 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* MODAL: CONDIÇÕES DE PAGAMENTO, DATA E VALOR RECEBIDO & SALDO AUTOMÁTICO DO ADM */}
+      {conditionModalOrder && (() => {
+        const pendingInputAmount = parseFloat(newReceiptAmount.replace(',', '.')) || 0;
+        const savedReceiptsTotal = condReceipts.reduce((s, r) => s + Number(r.amount || 0), 0);
+        const previewTotalReceived = savedReceiptsTotal + (pendingInputAmount > 0 ? pendingInputAmount : 0);
+        const previewRemainingBalance = Math.max(0, conditionModalOrder.total - previewTotalReceived);
+        const isPreviewPaid = previewRemainingBalance <= 0.01 && previewTotalReceived > 0;
 
-            <div className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        // Se o ADM preencheu um valor no campo e clicou direto em Salvar, inclui esse recebimento automaticamente
+        const getFinalReceiptsToSave = (): PaymentReceipt[] => {
+          if (pendingInputAmount > 0) {
+            return [
+              ...condReceipts,
+              {
+                id: `rec-${Date.now()}`,
+                date: newReceiptDate || new Date().toISOString().slice(0, 10),
+                amount: pendingInputAmount,
+                method: newReceiptMethod || 'PIX'
+              }
+            ];
+          }
+          return condReceipts;
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <div className="relative bg-white rounded-t-3xl sm:rounded-2xl max-w-lg w-full p-5 sm:p-7 shadow-2xl space-y-4 border border-neutral-200 max-h-[92vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-3 border-b border-neutral-200">
                 <div>
-                  <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
-                    Forma de Pagamento
-                  </label>
-                  <select
-                    value={condMethod}
-                    onChange={(e) => setCondMethod(e.target.value as Order['paymentMethod'])}
-                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2.5 text-xs font-semibold"
-                  >
-                    <option value="pix">PIX (À Vista ou Parcelado)</option>
-                    <option value="credit_card">Cartão de Crédito</option>
-                    <option value="boleto">Boleto / Parcelamento Direto</option>
-                  </select>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8B1E3F] block">
+                    Controle Simples do ADM • VASCONCELOS
+                  </span>
+                  <h3 className="text-base sm:text-lg font-extrabold text-neutral-950">
+                    Lançar Recebimento & Saldo da Compra
+                  </h3>
+                  <p className="text-xs text-neutral-500">
+                    Pedido <strong>{conditionModalOrder.orderNumber}</strong> •{' '}
+                    <strong>{conditionModalOrder.customer.name}</strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConditionModalOrder(null)}
+                  className="p-2 rounded-xl bg-neutral-100 text-neutral-600 hover:text-neutral-950 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* 1. RESUMO AUTOMÁTICO DO SALDO DA COMPRA (GRANDE E LIMPO PARA CELULAR) */}
+              <div className="grid grid-cols-3 gap-2.5 text-center">
+                <div className="p-3 rounded-2xl bg-[#F7F6F2] border border-neutral-300">
+                  <span className="text-[10px] font-bold uppercase text-neutral-500 block">
+                    Valor da Compra
+                  </span>
+                  <p className="text-sm sm:text-base font-extrabold text-neutral-950 mt-1">
+                    {formatBRL(conditionModalOrder.total)}
+                  </p>
                 </div>
 
-                <div>
-                  <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
-                    Plano (À Vista ou Parcelas)
-                  </label>
-                  <select
-                    value={condInstallments}
-                    onChange={(e) => setCondInstallments(Number(e.target.value))}
-                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2.5 text-xs font-bold"
+                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-300">
+                  <span className="text-[10px] font-bold uppercase text-emerald-800 block">
+                    Total Recebido
+                  </span>
+                  <p className="text-sm sm:text-base font-extrabold text-emerald-700 mt-1">
+                    {formatBRL(previewTotalReceived)}
+                  </p>
+                </div>
+
+                <div
+                  className={`p-3 rounded-2xl border-2 ${
+                    isPreviewPaid
+                      ? 'bg-emerald-50 border-emerald-500'
+                      : 'bg-amber-50 border-amber-400'
+                  }`}
+                >
+                  <span
+                    className={`text-[10px] font-bold uppercase block ${
+                      isPreviewPaid ? 'text-emerald-800' : 'text-amber-900'
+                    }`}
                   >
-                    <option value={1}>1x À Vista ({formatBRL(conditionModalOrder.total)})</option>
-                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-                      <option key={n} value={n}>
-                        Parcelado em {n}x de {formatBRL(conditionModalOrder.total / n)}
-                      </option>
+                    Saldo Restante
+                  </span>
+                  <p
+                    className={`text-sm sm:text-base font-extrabold mt-1 ${
+                      isPreviewPaid ? 'text-emerald-700' : 'text-[#8B1E3F]'
+                    }`}
+                  >
+                    {isPreviewPaid ? 'QUITADO ✅' : formatBRL(previewRemainingBalance)}
+                  </p>
+                </div>
+              </div>
+
+              {/* 2. LANÇAR DATA QUE RECEBEU E VALOR RECEBIDO */}
+              <div className="p-4 rounded-2xl bg-[#F7F6F2] border border-neutral-300 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-neutral-900">
+                    1. Coloque a Data que Recebeu e o Valor
+                  </span>
+                  {previewRemainingBalance > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNewReceiptAmount(
+                          Math.max(0, conditionModalOrder.total - savedReceiptsTotal).toFixed(2)
+                        )
+                      }
+                      className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-emerald-700 text-white cursor-pointer"
+                    >
+                      Preencher Saldo Total
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[11px] font-bold text-neutral-700 block">
+                      Data que Recebeu *
+                    </label>
+                    <input
+                      type="date"
+                      value={newReceiptDate}
+                      onChange={(e) => setNewReceiptDate(e.target.value)}
+                      className="w-full mt-1 bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-xs font-bold text-neutral-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-neutral-700 block">
+                      Valor Recebido (R$) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      inputMode="decimal"
+                      value={newReceiptAmount}
+                      onChange={(e) => setNewReceiptAmount(e.target.value)}
+                      placeholder="Ex: 100.00"
+                      className="w-full mt-1 bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-sm font-mono font-extrabold text-emerald-800 placeholder:font-normal"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={newReceiptMethod}
+                    onChange={(e) => setNewReceiptMethod(e.target.value)}
+                    className="bg-white border border-neutral-300 rounded-xl px-3 py-2.5 text-xs font-bold text-neutral-800"
+                  >
+                    <option value="PIX">Via PIX</option>
+                    <option value="Dinheiro">Em Dinheiro</option>
+                    <option value="Cartão">No Cartão</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={handleAddReceiptToModal}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#111111] hover:bg-emerald-700 text-white text-xs font-extrabold uppercase tracking-wider flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Confirmar Valor e Abater do Saldo</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 3. HISTÓRICO DE PAGAMENTOS JÁ LANÇADOS NESTA COMPRA */}
+              {condReceipts.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-700 block">
+                    Pagamentos Já Recebidos neste Pedido ({condReceipts.length})
+                  </span>
+                  <div className="divide-y divide-neutral-200 border border-neutral-200 rounded-xl overflow-hidden bg-white">
+                    {condReceipts.map((r, idx) => (
+                      <div
+                        key={r.id}
+                        className="p-3 flex items-center justify-between text-xs hover:bg-neutral-50"
+                      >
+                        <div>
+                          <span className="font-mono font-bold text-neutral-500 mr-2">
+                            #{idx + 1}
+                          </span>
+                          <span className="font-bold text-neutral-900">
+                            📅 {formatReceiptDateBr(r.date)}
+                          </span>
+                          <span className="ml-2 px-2 py-0.5 rounded bg-neutral-100 text-neutral-700 text-[10px] font-bold">
+                            {r.method || 'PIX'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-extrabold text-emerald-700 text-sm">
+                            + {formatBRL(r.amount)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveReceiptFromModal(r.id)}
+                            className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                            title="Remover lançamento"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
                     ))}
-                  </select>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* 4. OBSERVAÇÃO / PRÓXIMO VENCIMENTO OPCIONAL */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                 <div>
-                  <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
-                    Vencimento / 1ª Parcela
+                  <label className="font-bold text-neutral-700 text-[11px]">
+                    Previsão do Próximo Pagamento
                   </label>
                   <input
                     type="text"
                     value={condDueDate}
                     onChange={(e) => setCondDueDate(e.target.value)}
-                    placeholder="Ex: Imediato, Dia 10/12, etc."
-                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2 text-xs"
+                    placeholder="Ex: Dia 15/12 ou A combinar"
+                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-xl px-3 py-2 text-xs"
                   />
                 </div>
-
                 <div>
-                  <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
-                    Status Financeiro Inicial
+                  <label className="font-bold text-neutral-700 text-[11px]">
+                    Observação para o PDF / Cliente
                   </label>
-                  <select
-                    value={condStatus}
-                    onChange={(e) => setCondStatus(e.target.value as Order['paymentStatus'])}
-                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2 text-xs font-semibold"
-                  >
-                    <option value="pending">Aguardando Pagamento / Em Aberto</option>
-                    <option value="paid">Aprovado / Em Curso</option>
-                  </select>
+                  <input
+                    type="text"
+                    value={condNotes}
+                    onChange={(e) => setCondNotes(e.target.value)}
+                    placeholder="Observação da compra..."
+                    className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-xl px-3 py-2 text-xs"
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="font-bold text-neutral-700 uppercase tracking-wider text-[11px]">
-                  Condições Estabelecidas pelo ADM (Sairá no PDF Oficial)
-                </label>
-                <textarea
-                  rows={3}
-                  value={condNotes}
-                  onChange={(e) => setCondNotes(e.target.value)}
-                  placeholder="Descreva as condições combinadas com o cliente (ex: Entrada via PIX + 2x a cada 30 dias, Entrega gratuita VasconcelosExpress)..."
-                  className="w-full mt-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3 py-2 text-xs"
-                />
-              </div>
-
-              <div className="p-3 rounded-lg bg-[#F7F6F2] border border-neutral-200 flex items-center justify-between">
-                <span className="text-[11px] text-neutral-600">
-                  Modalidade de Entrega Fixa: <strong>VasconcelosExpress (R$ 0,00)</strong>
-                </span>
-                <span className="font-bold text-neutral-950">
-                  {condInstallments === 1
-                    ? `À Vista: ${formatBRL(conditionModalOrder.total)}`
-                    : `${condInstallments}x de ${formatBRL(conditionModalOrder.total / condInstallments)}`}
-                </span>
-              </div>
-
-              <div className="pt-3 border-t border-neutral-200 flex flex-col sm:flex-row gap-2 justify-end">
+              {/* 5. BOTÕES DE AÇÃO GRANDES PARA CELULAR E PC */}
+              <div className="pt-3 border-t border-neutral-200 space-y-2">
                 <button
                   type="button"
                   onClick={() => {
+                    const finalReceipts = getFinalReceiptsToSave();
+                    const totalRec = finalReceipts.reduce((s, r) => s + Number(r.amount || 0), 0);
+                    const finalStatus: Order['paymentStatus'] =
+                      totalRec >= conditionModalOrder.total - 0.01 ? 'paid' : condStatus;
+
                     updateOrderPaymentConditions(conditionModalOrder.id, {
                       paymentMethod: condMethod,
                       installments: condInstallments,
-                      paymentStatus: condStatus,
+                      paymentStatus: finalStatus,
                       adminPaymentTerms: condNotes,
-                      adminFirstDueDate: condDueDate
-                    });
-
-                    const updatedOrder: Order = {
-                      ...conditionModalOrder,
-                      paymentMethod: condMethod,
-                      installments: condInstallments,
-                      paymentStatus: condStatus,
-                      adminPaymentTerms: condNotes,
-                      adminFirstDueDate: condDueDate
-                    };
-
-                    const digits = (updatedOrder.customer.phone || '').replace(/\D/g, '');
-                    const fullPhone = digits ? (digits.startsWith('55') ? digits : `55${digits}`) : '';
-                    const waText = [
-                      `Olá, *${updatedOrder.customer.name}*! Seguem as condições estabelecidas pela Administração *VASCONCELOS* para o seu pedido *${updatedOrder.orderNumber}*:`,
-                      ``,
-                      `🚚 *Entrega:* VasconcelosExpress (GRÁTIS - Sem custo adicional)`,
-                      `💳 *Condição de Pagamento:* ${
-                        condInstallments === 1
-                          ? `À Vista (${formatBRL(updatedOrder.total)})`
-                          : `Parcelado em ${condInstallments}x de ${formatBRL(updatedOrder.total / condInstallments)}`
-                      }`,
-                      `📅 *Vencimento:* ${condDueDate}`,
-                      `📝 *Detalhes:* ${condNotes}`,
-                      ``,
-                      `🔑 *Chave PIX / Contato ADM:* sandravasconcellossillva@gmail.com`
-                    ].join('\n');
-
-                    if (fullPhone) {
-                      window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(waText)}`, '_blank');
-                    }
-                    setConditionModalOrder(null);
-                  }}
-                  className="px-4 py-2.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <MessageCircle className="w-3.5 h-3.5" />
-                  <span>Salvar e Enviar no WhatsApp</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    updateOrderPaymentConditions(conditionModalOrder.id, {
-                      paymentMethod: condMethod,
-                      installments: condInstallments,
-                      paymentStatus: condStatus,
-                      adminPaymentTerms: condNotes,
-                      adminFirstDueDate: condDueDate
-                    });
-
-                    const updatedOrder: Order = {
-                      ...conditionModalOrder,
-                      paymentMethod: condMethod,
-                      installments: condInstallments,
-                      paymentStatus: condStatus,
-                      adminPaymentTerms: condNotes,
-                      adminFirstDueDate: condDueDate
-                    };
-
-                    generateOrderConditionsPdf({
-                      order: updatedOrder,
-                      settledInstallments: paidInstallmentsMap[updatedOrder.id] || 0,
-                      customTermsNote: condNotes,
-                      firstDueDate: condDueDate
+                      adminFirstDueDate: condDueDate,
+                      paymentReceipts: finalReceipts
                     });
                     setConditionModalOrder(null);
                   }}
-                  className="px-5 py-2.5 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white font-extrabold text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <FileText className="w-3.5 h-3.5" />
-                  <span>Salvar e Gerar PDF das Condições</span>
+                  <Save className="w-4 h-4" />
+                  <span>Salvar Recebimentos e Atualizar Saldo</span>
                 </button>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const finalReceipts = getFinalReceiptsToSave();
+                      const totalRec = finalReceipts.reduce((s, r) => s + Number(r.amount || 0), 0);
+                      const remBal = Math.max(0, conditionModalOrder.total - totalRec);
+                      const finalStatus: Order['paymentStatus'] =
+                        remBal <= 0.01 && totalRec > 0 ? 'paid' : condStatus;
+
+                      updateOrderPaymentConditions(conditionModalOrder.id, {
+                        paymentMethod: condMethod,
+                        installments: condInstallments,
+                        paymentStatus: finalStatus,
+                        adminPaymentTerms: condNotes,
+                        adminFirstDueDate: condDueDate,
+                        paymentReceipts: finalReceipts
+                      });
+
+                      const receiptsLines =
+                        finalReceipts.length > 0
+                          ? finalReceipts
+                              .map(
+                                (r) =>
+                                  `• ${formatReceiptDateBr(r.date)}: *${formatBRL(r.amount)}* (${r.method || 'PIX'})`
+                              )
+                              .join('\n')
+                          : '• Nenhum pagamento registrado ainda';
+
+                      const digits = (conditionModalOrder.customer.phone || '').replace(/\D/g, '');
+                      const fullPhone = digits ? (digits.startsWith('55') ? digits : `55${digits}`) : '';
+                      const waText = [
+                        `Olá, *${conditionModalOrder.customer.name}*! Segue o resumo atualizado do seu pedido *${conditionModalOrder.orderNumber}* na *VASCONCELOS*:`,
+                        ``,
+                        `🛍️ *Valor Total da Compra:* ${formatBRL(conditionModalOrder.total)}`,
+                        `✅ *Total Já Recebido:* ${formatBRL(totalRec)}`,
+                        `📌 *Saldo Restante a Pagar:* *${remBal <= 0.01 && totalRec > 0 ? 'R$ 0,00 (QUITADO ✅)' : formatBRL(remBal)}*`,
+                        ``,
+                        `📅 *Histórico de Pagamentos Recebidos:*`,
+                        receiptsLines,
+                        ``,
+                        `🚚 *Entrega:* VasconcelosExpress (GRÁTIS)`,
+                        `🔑 *Chave PIX / Contato ADM:* sandravasconcellossillva@gmail.com`
+                      ].join('\n');
+
+                      if (fullPhone) {
+                        window.open(`https://wa.me/${fullPhone}?text=${encodeURIComponent(waText)}`, '_blank');
+                      }
+                      setConditionModalOrder(null);
+                    }}
+                    className="py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Enviar Resumo no WhatsApp</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const finalReceipts = getFinalReceiptsToSave();
+                      const totalRec = finalReceipts.reduce((s, r) => s + Number(r.amount || 0), 0);
+                      const remBal = Math.max(0, conditionModalOrder.total - totalRec);
+                      const finalStatus: Order['paymentStatus'] =
+                        remBal <= 0.01 && totalRec > 0 ? 'paid' : condStatus;
+
+                      updateOrderPaymentConditions(conditionModalOrder.id, {
+                        paymentMethod: condMethod,
+                        installments: condInstallments,
+                        paymentStatus: finalStatus,
+                        adminPaymentTerms: condNotes,
+                        adminFirstDueDate: condDueDate,
+                        paymentReceipts: finalReceipts
+                      });
+
+                      const updatedOrder: Order = {
+                        ...conditionModalOrder,
+                        paymentMethod: condMethod,
+                        installments: condInstallments,
+                        paymentStatus: finalStatus,
+                        adminPaymentTerms: condNotes,
+                        adminFirstDueDate: condDueDate,
+                        paymentReceipts: finalReceipts
+                      };
+
+                      generateOrderConditionsPdf({
+                        order: updatedOrder,
+                        customTermsNote: condNotes,
+                        firstDueDate: condDueDate,
+                        paymentReceipts: finalReceipts
+                      });
+                      setConditionModalOrder(null);
+                    }}
+                    className="py-3 px-4 rounded-xl bg-[#8B1E3F] hover:bg-neutral-950 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Salvar e Gerar PDF c/ Saldo</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
+      {/* BARRA INFERIOR FIXA PARA O ADM NO CELULAR (md:hidden) */}
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#111111] text-white border-t border-neutral-800 px-2 py-2 flex items-center justify-around shadow-2xl">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('relatorios');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${
+            activeTab === 'relatorios' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
+          }`}
+        >
+          <DollarSign className="w-5 h-5" />
+          <span className="text-[10px]">Pedidos & Saldo</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('estoque');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${
+            activeTab === 'estoque' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
+          }`}
+        >
+          <Package className="w-5 h-5" />
+          <span className="text-[10px]">Estoque</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('cupons');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${
+            activeTab === 'cupons' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
+          }`}
+        >
+          <Tag className="w-5 h-5" />
+          <span className="text-[10px]">Cupons</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('cobranca');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${
+            activeTab === 'cobranca' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
+          }`}
+        >
+          <MessageCircle className="w-5 h-5" />
+          <span className="text-[10px]">Cobrança</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setViewMode('store')}
+          className="flex flex-col items-center gap-1 px-2 py-1 rounded-lg text-neutral-300 hover:text-white cursor-pointer"
+        >
+          <ExternalLink className="w-5 h-5" />
+          <span className="text-[10px]">Ver Loja</span>
+        </button>
+      </div>
 
     </div>
   );
