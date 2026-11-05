@@ -1,56 +1,49 @@
 import React from 'react';
-import { Sparkles, Flame, Droplets, Smile, Gift, Layers } from 'lucide-react';
-import { motion } from 'motion/react';
 import { useStore } from '../context/StoreContext';
 
 interface CategoryItem {
   id: string;
   name: string;
-  icon: React.ElementType;
-  tag?: string;
+  subtitle: string;
   image: string;
 }
 
 const CATEGORIES: CategoryItem[] = [
   {
     id: 'todos',
-    name: 'Ver Tudo',
-    icon: Layers,
-    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=300&q=80'
+    name: 'Todo o Catálogo',
+    subtitle: 'Curadoria completa',
+    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=400&q=80'
   },
   {
     id: 'perfumaria',
-    name: 'Perfumaria',
-    icon: Flame,
-    tag: 'Mais Desejados',
-    image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=300&q=80'
+    name: 'Perfumaria Fina',
+    subtitle: 'Eau de Parfum',
+    image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=400&q=80'
   },
   {
     id: 'bodysplash',
     name: 'Body Splash',
-    icon: Droplets,
-    tag: 'Sensação',
-    image: 'https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?auto=format&fit=crop&w=300&q=80'
+    subtitle: 'Perfumação diária',
+    image: 'https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?auto=format&fit=crop&w=400&q=80'
   },
   {
     id: 'skincare',
     name: 'Skincare',
-    icon: Sparkles,
-    tag: 'Alta Performance',
-    image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=300&q=80'
+    subtitle: 'Fórmulas clínicas',
+    image: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=400&q=80'
   },
   {
     id: 'maquiagem',
     name: 'Maquiagem',
-    icon: Smile,
-    image: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=300&q=80'
+    subtitle: 'Lábios & Rosto',
+    image: 'https://images.unsplash.com/photo-1586495777744-4413f21062fa?auto=format&fit=crop&w=400&q=80'
   },
   {
     id: 'combos',
-    name: 'Kits & Presentes',
-    icon: Gift,
-    tag: 'Até 48% OFF',
-    image: 'https://images.unsplash.com/photo-1547887537-6158d64c35b3?auto=format&fit=crop&w=300&q=80'
+    name: 'Estojos & Kits',
+    subtitle: 'Para presentear',
+    image: 'https://images.unsplash.com/photo-1547887537-6158d64c35b3?auto=format&fit=crop&w=400&q=80'
   }
 ];
 
@@ -68,63 +61,47 @@ export const CategoryNav: React.FC = () => {
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-end justify-between mb-6">
         <div>
-          <span className="text-[11px] uppercase tracking-widest text-amber-700 font-bold block mb-1">
-            Coleções Exclusivas
+          <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-500 font-bold block mb-1">
+            Departamentos
           </span>
-          <h2 className="text-xl sm:text-2xl font-black text-neutral-900 tracking-tight font-display">
-            Navegue por Categorias
+          <h2 className="text-xl sm:text-2xl font-bold text-neutral-950 tracking-tight">
+            Compre por Categoria
           </h2>
-          <p className="text-xs text-neutral-500 font-light">
-            Selecione uma linha para explorar acordes olfativos e cuidados nobres
-          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 sm:gap-5">
-        {CATEGORIES.map((cat, index) => {
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
+        {CATEGORIES.map((cat) => {
           const isSelected = selectedCategory === cat.id;
           return (
-            <motion.button
+            <button
               key={cat.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: index * 0.05 }}
-              whileHover={{ y: -3 }}
-              whileTap={{ scale: 0.96 }}
               onClick={() => handleSelect(cat.id)}
-              className={`group flex flex-col items-center text-center p-3 rounded-2xl transition-all duration-300 border cursor-pointer ${
+              className={`group text-left rounded-xl overflow-hidden border transition-all duration-200 cursor-pointer flex flex-col bg-white ${
                 isSelected
-                  ? 'bg-amber-50/70 border-amber-400 shadow-md shadow-amber-500/10'
-                  : 'bg-white border-neutral-200/70 hover:border-amber-300/80 hover:shadow-md'
+                  ? 'border-neutral-950 ring-1 ring-neutral-950 shadow-sm'
+                  : 'border-neutral-200 hover:border-neutral-400'
               }`}
             >
-              <div
-                className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden mb-2.5 p-0.5 border-2 transition duration-500 group-hover:scale-105 ${
-                  isSelected ? 'border-amber-500 shadow-sm' : 'border-transparent'
-                }`}
-              >
+              <div className="aspect-4/3 w-full overflow-hidden bg-[#F2F0EC]">
                 <img
                   src={cat.image}
                   alt={cat.name}
-                  className="w-full h-full object-cover rounded-xl"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   loading="lazy"
                 />
-                {cat.tag && (
-                  <span className="absolute bottom-0 inset-x-0 bg-neutral-900/85 backdrop-blur-xs text-[8px] font-black text-amber-300 py-0.5 tracking-tighter uppercase">
-                    {cat.tag}
-                  </span>
-                )}
               </div>
-              <span
-                className={`text-xs font-bold transition line-clamp-1 ${
-                  isSelected ? 'text-amber-800' : 'text-neutral-800 group-hover:text-rose-600'
-                }`}
-              >
-                {cat.name}
-              </span>
-            </motion.button>
+              <div className="p-3">
+                <span className="block text-xs font-bold text-neutral-950 group-hover:text-[#8B1E3F] transition-colors">
+                  {cat.name}
+                </span>
+                <span className="block text-[11px] text-neutral-500 mt-0.5">
+                  {cat.subtitle}
+                </span>
+              </div>
+            </button>
           );
         })}
       </div>

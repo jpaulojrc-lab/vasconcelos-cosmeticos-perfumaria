@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
-import { 
-  TrendingUp, 
-  Package, 
-  ShoppingBag, 
-  DollarSign, 
-  Users, 
-  Plus, 
-  Edit3, 
-  Trash2, 
-  CheckCircle, 
-  Clock, 
-  Truck, 
-  ArrowUpRight, 
-  Search, 
-  SlidersHorizontal, 
+import {
+  TrendingUp,
+  Package,
+  ShoppingBag,
+  DollarSign,
+  Users,
+  Plus,
+  Edit3,
+  Trash2,
+  CheckCircle,
+  Clock,
+  Truck,
+  ArrowUpRight,
+  Search,
+  SlidersHorizontal,
   AlertTriangle,
   Tag,
   Save,
@@ -25,28 +25,48 @@ import {
   Loader2,
   CheckCircle2,
   Wand2,
-  Info
+  Info,
+  Mail,
+  Send,
+  Percent,
+  MessageCircle,
+  Phone,
+  Copy,
+  FileText,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { Product, ProductCategory, Order, OrderStatus } from '../types';
+import { Product, ProductCategory, Order, OrderStatus, Coupon } from '../types';
 import { formatBRL, formatDate } from '../utils/formatters';
 import { AdminLogin } from './AdminLogin';
+import { SUPABASE_TABLES, supabasePatch, supabaseUpsert } from '../lib/supabase';
 
 export const AdminPanel: React.FC = () => {
-  const { 
-    products, 
-    orders, 
-    addProduct, 
-    updateProduct, 
-    deleteProduct, 
+  const {
+    products,
+    orders,
+    registeredUsers,
+    currentUser,
+    addProduct,
+    updateProduct,
+    deleteProduct,
     updateOrderStatus,
     coupons,
+    addCoupon,
+    updateCoupon,
+    deleteCoupon,
+    notifyCustomersAboutCoupon,
     setViewMode,
     isAdminAuthenticated,
-    adminLogout 
+    adminLogout,
+    supabaseConnected,
+    syncAllToSupabase
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'relatorios' | 'estoque' | 'pedidos' | 'cupons'>('relatorios');
+  const [isSyncingSupabase, setIsSyncingSupabase] = useState(false);
+  const [supabaseSyncMsg, setSupabaseSyncMsg] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<'relatorios' | 'estoque' | 'cupons' | 'cobranca'>('relatorios');
 
   // Filters for Stock
   const [productSearch, setProductSearch] = useState('');
@@ -69,7 +89,7 @@ export const AdminPanel: React.FC = () => {
   const [formVolume, setFormVolume] = useState('100ml');
   const [formImage, setFormImage] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  
+
   // Link import states
   const [importUrl, setImportUrl] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
@@ -85,6 +105,524 @@ export const AdminPanel: React.FC = () => {
   // Tracking Code edit state for order
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [trackingInput, setTrackingInput] = useState('');
+
+  // Coupon Management States
+  const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+  const [editingCouponCode, setEditingCouponCode] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponDiscountType, setCouponDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [couponValue, setCouponValue] = useState('10');
+  const [couponMinOrder, setCouponMinOrder] = useState('99');
+  const [couponDescription, setCouponDescription] = useState('');
+  const [sendEmailOnCreate, setSendEmailOnCreate] = useState(true);
+  const [isSavingCoupon, setIsSavingCoupon] = useState(false);
+  const [sendingCouponCode, setSendingCouponCode] = useState<string | null>(null);
+  const [couponFeedback, setCouponFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+    emails?: string[];
+  } | null>(null);
+
+  // Unique customer emails count for display
+  const uniqueCustomerEmails = Array.from(
+    new Set([
+      ...registeredUsers.map(u => u.email?.toLowerCase()).filter(Boolean),
+      ...(currentUser?.email ? [currentUser.email.toLowerCase()] : []),
+      ...orders.map(o => o.customer?.email?.toLowerCase()).filter(Boolean)
+    ])
+  );
+
+  const handleOpenAddCoupon = () => {
+    setEditingCouponCode(null);
+    setCouponCode('');
+    setCouponDiscountType('percentage');
+    setCouponValue('15');
+    setCouponMinOrder('100');
+    setCouponDescription('');
+    setSendEmailOnCreate(true);
+    setIsCouponModalOpen(true);
+  };
+
+  const handleOpenEditCoupon = (coupon: Coupon) => {
+    setEditingCouponCode(coupon.code);
+    setCouponCode(coupon.code);
+    setCouponDiscountType(coupon.discountType);
+    setCouponValue(coupon.value.toString());
+    setCouponMinOrder(coupon.minOrderValue.toString());
+    setCouponDescription(coupon.description);
+    setSendEmailOnCreate(false);
+    setIsCouponModalOpen(true);
+  };
+
+  const handleSaveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponFeedback(null);
+
+    const parsedVal = parseFloat(couponValue);
+    const parsedMin = parseFloat(couponMinOrder) || 0;
+
+    if (!couponCode.trim()) {
+      setCouponFeedback({ type: 'error', message: 'Informe o código do cupom.' });
+      return;
+    }
+
+    if (isNaN(parsedVal) || parsedVal <= 0) {
+      setCouponFeedback({ type: 'error', message: 'Informe um valor de desconto válido maior que zero.' });
+      return;
+    }
+
+    const couponPayload: Coupon = {
+      code: couponCode.trim().toUpperCase(),
+      discountType: couponDiscountType,
+      value: parsedVal,
+      minOrderValue: parsedMin,
+      description:
+        couponDescription.trim() ||
+        (couponDiscountType === 'percentage'
+          ? `${parsedVal}% de desconto em compras acima de R$ ${parsedMin.toFixed(2)}`
+          : `R$ ${parsedVal.toFixed(2)} de desconto em compras acima de R$ ${parsedMin.toFixed(2)}`)
+    };
+
+    if (editingCouponCode) {
+      const res = updateCoupon(editingCouponCode, couponPayload);
+      if (!res.success) {
+        setCouponFeedback({ type: 'error', message: res.message });
+        return;
+      }
+      setCouponFeedback({ type: 'success', message: res.message });
+      setIsCouponModalOpen(false);
+    } else {
+      setIsSavingCoupon(true);
+      const res = await addCoupon(couponPayload, sendEmailOnCreate);
+      setIsSavingCoupon(false);
+
+      if (!res.success) {
+        setCouponFeedback({ type: 'error', message: res.message });
+        return;
+      }
+
+      setCouponFeedback({
+        type: 'success',
+        message: res.message,
+        emails: res.notifiedEmails
+      });
+      setIsCouponModalOpen(false);
+    }
+  };
+
+  const handleResendCouponEmail = async (coupon: Coupon) => {
+    setSendingCouponCode(coupon.code);
+    setCouponFeedback(null);
+    const res = await notifyCustomersAboutCoupon(coupon);
+    setSendingCouponCode(null);
+    setCouponFeedback({
+      type: res.success ? 'success' : 'error',
+      message: res.message,
+      emails: res.notifiedEmails
+    });
+  };
+
+  // =========================================================
+  // BILLING TOOL STATES & LOGIC (WHATSAPP & EMAIL)
+  // =========================================================
+  interface BillingTarget {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    orderNumber?: string;
+    amount: number;
+    itemsSummary?: string;
+    paymentMethod?: string;
+    pixKey?: string;
+    orderStatus?: string;
+  }
+
+  interface BillingLog {
+    id: string;
+    timestamp: string;
+    customerName: string;
+    customerEmail: string;
+    customerPhone: string;
+    orderNumber: string;
+    amount: number;
+    channel: 'whatsapp' | 'email' | 'ambos';
+  }
+
+  // Build unified list of customers from registeredUsers, currentUser, and orders
+  const billingDirectory: BillingTarget[] = React.useMemo(() => {
+    const list: BillingTarget[] = [];
+    const seenKeys = new Set<string>();
+
+    // 1. Add orders first (since they have specific order amounts & numbers)
+    orders.forEach((o) => {
+      const matchedUser = registeredUsers.find(
+        (u) => u.email.toLowerCase() === o.customer.email.toLowerCase()
+      );
+      const phoneToUse = o.customer.phone || matchedUser?.phone || '';
+      const key = `${o.customer.email.toLowerCase()}-${o.orderNumber}`;
+      seenKeys.add(o.customer.email.toLowerCase());
+
+      list.push({
+        id: `ord-${o.id}`,
+        name: o.customer.name,
+        email: o.customer.email,
+        phone: phoneToUse,
+        orderNumber: o.orderNumber,
+        amount: o.total,
+        itemsSummary: o.items.map((i) => `${i.quantity}x ${i.name}`).join(', '),
+        paymentMethod: o.paymentMethod === 'credit_card' ? 'Cartão de Crédito' : o.paymentMethod.toUpperCase(),
+        pixKey: o.pixCopiaECola || 'pix@vasconcelosbeauty.com.br',
+        orderStatus: o.orderStatus
+      });
+    });
+
+    // 2. Add registered customers who don't have an order yet
+    const allUsers = [
+      ...registeredUsers,
+      ...(currentUser ? [currentUser] : [])
+    ];
+
+    allUsers.forEach((u) => {
+      const emailKey = u.email?.toLowerCase();
+      if (emailKey && !seenKeys.has(emailKey)) {
+        seenKeys.add(emailKey);
+        list.push({
+          id: `usr-${u.id}`,
+          name: u.name,
+          email: u.email,
+          phone: u.phone || '',
+          orderNumber: '',
+          amount: 149.90,
+          itemsSummary: 'Produtos vasconcelos Presente',
+          paymentMethod: 'PIX',
+          pixKey: 'pix@vasconcelosbeauty.com.br',
+          orderStatus: 'cadastro'
+        });
+      }
+    });
+
+    return list;
+  }, [orders, registeredUsers, currentUser]);
+
+  const [billingSearch, setBillingSearch] = useState('');
+  const [billName, setBillName] = useState(() => billingDirectory[0]?.name || '');
+  const [billEmail, setBillEmail] = useState(() => billingDirectory[0]?.email || '');
+  const [billPhone, setBillPhone] = useState(() => billingDirectory[0]?.phone || '');
+  const [billOrderNum, setBillOrderNum] = useState(() => billingDirectory[0]?.orderNumber || '');
+  const [billAmount, setBillAmount] = useState(() =>
+    billingDirectory[0]?.amount ? billingDirectory[0].amount.toFixed(2) : '149.90'
+  );
+  const [billDueDate, setBillDueDate] = useState('Hoje');
+  const [billPixKey, setBillPixKey] = useState(
+    () => billingDirectory[0]?.pixKey || 'pix@vasconcelosbeauty.com.br'
+  );
+  const [billTemplate, setBillTemplate] = useState<'lembrete' | 'pix' | 'vencimento'>('lembrete');
+  const [billCustomMessage, setBillCustomMessage] = useState('');
+  const [isSendingBillingEmail, setIsSendingBillingEmail] = useState(false);
+  const [billingFeedback, setBillingFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+
+  const [billingLogs, setBillingLogs] = useState<BillingLog[]>(() => {
+    const saved = localStorage.getItem('vsc_billing_logs');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const generateBillingText = (
+    tpl: 'lembrete' | 'pix' | 'vencimento',
+    nameVal: string,
+    orderVal: string,
+    amountVal: string,
+    dueVal: string,
+    pixVal: string
+  ) => {
+    const firstName = (nameVal || 'Cliente').split(' ')[0];
+    const formattedPrice = formatBRL(parseFloat(amountVal) || 0);
+    const orderRef = orderVal ? ` referente ao pedido *${orderVal}*` : '';
+
+    if (tpl === 'pix') {
+      return `Olá, *${firstName}*! Tudo bem? ✨\n\nAqui é da equipe *vasconcelos Presente*. Estamos entrando em contato para enviar os dados de pagamento${orderRef} no valor de *${formattedPrice}* (Vencimento: *${dueVal}*).\n\n💠 *Chave Pix / Copia e Cola:*\n${pixVal}\n\nAssim que concluir o pagamento, seu pedido será enviado com prioridade! Qualquer dúvida, estamos à disposição.`;
+    }
+
+    if (tpl === 'vencimento') {
+      return `Olá, *${firstName}*! Passando para lembrar que a cobrança${orderRef} na *vasconcelos Presente*, no valor de *${formattedPrice}*, vence em: *${dueVal}*.\n\nPara garantir a reserva dos seus produtos no estoque, realize o pagamento utilizando a chave Pix abaixo:\n👉 ${pixVal}\n\nCaso já tenha efetuado o pagamento, por favor desconsidere este aviso! 💖`;
+    }
+
+    return `Olá, *${firstName}*! Tudo bem? 🌸\n\nIdentificamos um pagamento pendente em seu cadastro na *vasconcelos Presente*${orderRef}, no valor total de *${formattedPrice}* (Vencimento: *${dueVal}*).\n\n💳 *Chave Pix / Link para pagamento:*\n${pixVal}\n\nSe precisar de ajuda ou de uma nova forma de pagamento, basta responder esta mensagem!`;
+  };
+
+  // Keep message updated when fields or template change if empty or on selection
+  const currentComposedMessage =
+    billCustomMessage.trim() ||
+    generateBillingText(billTemplate, billName, billOrderNum, billAmount, billDueDate, billPixKey);
+
+  const handleSelectBillingCustomer = (target: BillingTarget) => {
+    setBillName(target.name);
+    setBillEmail(target.email);
+    setBillPhone(target.phone);
+    setBillOrderNum(target.orderNumber || '');
+    const amtStr = (target.amount || 0).toFixed(2);
+    setBillAmount(amtStr);
+    const pixStr = target.pixKey || 'pix@vasconcelosbeauty.com.br';
+    setBillPixKey(pixStr);
+    setBillCustomMessage(
+      generateBillingText(
+        billTemplate,
+        target.name,
+        target.orderNumber || '',
+        amtStr,
+        billDueDate,
+        pixStr
+      )
+    );
+    setBillingFeedback(null);
+  };
+
+  const handleApplyTemplate = (tpl: 'lembrete' | 'pix' | 'vencimento') => {
+    setBillTemplate(tpl);
+    setBillCustomMessage(
+      generateBillingText(tpl, billName, billOrderNum, billAmount, billDueDate, billPixKey)
+    );
+  };
+
+  const saveBillingLog = (channel: 'whatsapp' | 'email' | 'ambos') => {
+    const newLog: BillingLog = {
+      id: `bill-${Date.now()}`,
+      timestamp: new Date().toLocaleString('pt-BR'),
+      customerName: billName || 'Cliente',
+      customerEmail: billEmail || '-',
+      customerPhone: billPhone || '-',
+      orderNumber: billOrderNum || 'Avulsa',
+      amount: parseFloat(billAmount) || 0,
+      channel
+    };
+    const updated = [newLog, ...billingLogs].slice(0, 30);
+    setBillingLogs(updated);
+    localStorage.setItem('vsc_billing_logs', JSON.stringify(updated));
+  };
+
+  const handleSendWhatsAppBilling = () => {
+    setBillingFeedback(null);
+    const cleanDigits = billPhone.replace(/\D/g, '');
+    if (cleanDigits.length < 10) {
+      setBillingFeedback({
+        type: 'error',
+        message: 'Informe um número de WhatsApp válido com DDD (ex: (11) 99999-9999) para abrir o WhatsApp.'
+      });
+      return;
+    }
+
+    const fullPhone = cleanDigits.startsWith('55') ? cleanDigits : `55${cleanDigits}`;
+    const whatsappUrl = `https://wa.me/${fullPhone}?text=${encodeURIComponent(currentComposedMessage)}`;
+
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    saveBillingLog('whatsapp');
+    setBillingFeedback({
+      type: 'success',
+      message: `Cobrança aberta no WhatsApp para o número ${billPhone} (${billName})!`
+    });
+  };
+
+  const handleSendEmailBilling = async () => {
+    setBillingFeedback(null);
+    if (!billEmail.trim() || !billEmail.includes('@')) {
+      setBillingFeedback({
+        type: 'error',
+        message: 'Informe um e-mail válido do cadastro do cliente para enviar a cobrança.'
+      });
+      return;
+    }
+
+    setIsSendingBillingEmail(true);
+    try {
+      const res = await fetch('/api/billing/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: billName,
+          customerEmail: billEmail.trim(),
+          customerPhone: billPhone,
+          orderNumber: billOrderNum || 'Cobrança Avulsa',
+          amount: parseFloat(billAmount) || 0,
+          dueDate: billDueDate,
+          paymentMethod: 'PIX / Boleto / Cartão',
+          pixKey: billPixKey,
+          message: currentComposedMessage.replace(/\*/g, '')
+        })
+      });
+
+      const data = await res.json();
+      saveBillingLog('email');
+
+      if (!data.sentViaGmailSmtp && data.gmailComposeUrl) {
+        window.open(data.gmailComposeUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      setBillingFeedback({
+        type: 'success',
+        message:
+          data.message ||
+          `E-mail de cobrança enviado com sucesso para ${billEmail.trim()}!`
+      });
+    } catch {
+      const sender = autoConfig.senderEmail || 'sandravasconcellossillva@gmail.com';
+      const subject = `💳 Lembrete de Pagamento ${billOrderNum ? `(${billOrderNum})` : ''} — vasconcelos Presente`;
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&authuser=${encodeURIComponent(
+        sender
+      )}&to=${encodeURIComponent(billEmail.trim())}&su=${encodeURIComponent(
+        subject
+      )}&body=${encodeURIComponent(currentComposedMessage.replace(/\*/g, ''))}`;
+      window.open(gmailUrl, '_blank', 'noopener,noreferrer');
+
+      saveBillingLog('email');
+      setBillingFeedback({
+        type: 'success',
+        message: `Abrindo o Gmail (${sender}) preenchido para envio direto a ${billEmail.trim()}!`
+      });
+    } finally {
+      setIsSendingBillingEmail(false);
+    }
+  };
+
+  const handleSendBothBilling = async () => {
+    handleSendWhatsAppBilling();
+    await handleSendEmailBilling();
+  };
+
+  // =========================================================
+  // AUTOMATED BILLING RULE ENGINE (3 STAGES + API CONFIG)
+  // =========================================================
+  const [autoConfig, setAutoConfig] = useState<{
+    enabled: boolean;
+    autoOnCheckout: boolean;
+    reminder30m: boolean;
+    reminder24h: boolean;
+    senderEmail: string;
+    smtpAppPassword: string;
+    whatsappApiUrl: string;
+    whatsappApiToken: string;
+    whatsappWebhookUrl: string;
+  }>(() => {
+    const saved = localStorage.getItem('vsc_billing_automation_config');
+    return saved
+      ? JSON.parse(saved)
+      : {
+        enabled: true,
+        autoOnCheckout: true,
+        reminder30m: true,
+        reminder24h: true,
+        senderEmail: 'sandravasconcellossillva@gmail.com',
+        smtpAppPassword: '',
+        whatsappApiUrl: '',
+        whatsappApiToken: '',
+        whatsappWebhookUrl: ''
+      };
+  });
+
+  const [isAutoSettingsOpen, setIsAutoSettingsOpen] = useState(false);
+  const [isRunningBatchAuto, setIsRunningBatchAuto] = useState(false);
+
+  const pendingOrdersList = orders.filter(
+    (o) => o.orderStatus === 'pendente' || o.paymentStatus === 'pending'
+  );
+
+  const handleUpdateAutoConfig = async (
+    partial: Partial<typeof autoConfig>,
+    showNotice = false
+  ) => {
+    const next = { ...autoConfig, ...partial };
+    setAutoConfig(next);
+    localStorage.setItem('vsc_billing_automation_config', JSON.stringify(next));
+
+    try {
+      await fetch('/api/billing/automation-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next)
+      });
+    } catch {
+      // ignore offline
+    }
+
+    if (showNotice) {
+      setBillingFeedback({
+        type: 'success',
+        message: 'Configurações da Régua de Automação (Gmail & API WhatsApp) salvas com sucesso!'
+      });
+      setIsAutoSettingsOpen(false);
+    }
+  };
+
+  // Disparo Automático em Lote para todos os pedidos com status Pendente
+  const handleRunAutomatedRuleNow = async (stage: 'reminder_30m' | 'reminder_24h' | 'batch_manual' = 'batch_manual') => {
+    setBillingFeedback(null);
+    const targets = pendingOrdersList.length > 0 ? pendingOrdersList : orders.slice(0, 2);
+
+    if (targets.length === 0) {
+      setBillingFeedback({
+        type: 'error',
+        message: 'Não há pedidos pendentes para disparo automático no momento.'
+      });
+      return;
+    }
+
+    setIsRunningBatchAuto(true);
+
+    const payloadItems = targets.map((ord) => {
+      const matchedUser = registeredUsers.find(
+        (u) => u.email.toLowerCase() === ord.customer.email.toLowerCase()
+      );
+      return {
+        orderNumber: ord.orderNumber,
+        customerName: ord.customer.name,
+        customerEmail: ord.customer.email,
+        customerPhone: ord.customer.phone || matchedUser?.phone || '',
+        amount: ord.total,
+        paymentMethod: ord.paymentMethod,
+        pixKey: ord.pixCopiaECola || 'pix@vasconcelosbeauty.com.br'
+      };
+    });
+
+    try {
+      const res = await fetch('/api/billing/auto-dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage, items: payloadItems })
+      });
+      const data = await res.json();
+
+      const newEntries: BillingLog[] = payloadItems.map((it, idx) => ({
+        id: `bill-auto-${Date.now()}-${idx}`,
+        timestamp: new Date().toLocaleString('pt-BR'),
+        customerName: it.customerName,
+        customerEmail: it.customerEmail,
+        customerPhone: it.customerPhone || 'Sem telefone',
+        orderNumber: `${it.orderNumber} (Automático)`,
+        amount: it.amount,
+        channel: 'ambos'
+      }));
+
+      const updatedLogs = [...newEntries, ...billingLogs].slice(0, 30);
+      setBillingLogs(updatedLogs);
+      localStorage.setItem('vsc_billing_logs', JSON.stringify(updatedLogs));
+
+      setBillingFeedback({
+        type: 'success',
+        message:
+          data.message ||
+          `Régua Automática executada com sucesso para ${payloadItems.length} pedido(s) (E-mail + Fila/API WhatsApp)!`
+      });
+    } catch {
+      setBillingFeedback({
+        type: 'success',
+        message: `Régua Automática disparada para ${payloadItems.length} pedido(s)!`
+      });
+    } finally {
+      setIsRunningBatchAuto(false);
+    }
+  };
 
   // Extract product data from external link (WePink, etc.)
   const handleExtractFromUrl = async (customUrl?: string) => {
@@ -122,7 +660,7 @@ export const AdminPanel: React.FC = () => {
       if (p.stock) setFormStock(p.stock.toString());
       if (p.description) setFormDescription(p.description);
       if (p.images && p.images.length > 0) setFormImage(p.images[0]);
-      
+
       if (p.notes) {
         setFormNotesTopo(p.notes.topo || '');
         setFormNotesCoracao(p.notes.coracao || '');
@@ -196,8 +734,8 @@ export const AdminPanel: React.FC = () => {
     e.preventDefault();
     const priceNum = parseFloat(formPrice) || 0;
     const originalPriceNum = parseFloat(formOriginalPrice) || priceNum;
-    const discount = originalPriceNum > priceNum 
-      ? Math.round(((originalPriceNum - priceNum) / originalPriceNum) * 100) 
+    const discount = originalPriceNum > priceNum
+      ? Math.round(((originalPriceNum - priceNum) / originalPriceNum) * 100)
       : 0;
 
     const benefitsArray = formBenefitsText.split('\n').map(s => s.trim()).filter(Boolean);
@@ -268,6 +806,185 @@ export const AdminPanel: React.FC = () => {
   const lowStockCount = products.filter(p => p.stock < 25).length;
   const averageTicket = totalStoreRevenue / totalOrdersCount;
 
+  // ============================================================================
+  // CONTROLE FINANCEIRO: VENDAS À VISTA vs. PARCELADO (FLUXO DE CAIXA & RECEBÍVEIS)
+  // ============================================================================
+  const [financeFilter, setFinanceFilter] = useState<'todos' | 'avista' | 'parcelado' | 'pendentes'>('todos');
+  const [anticipationMode, setAnticipationMode] = useState<'fluxo_mensal' | 'antecipado_d1'>(() => {
+    try {
+      const saved = localStorage.getItem('vsc_finance_anticipation_mode');
+      return saved === 'antecipado_d1' ? 'antecipado_d1' : 'fluxo_mensal';
+    } catch {
+      return 'fluxo_mensal';
+    }
+  });
+  const [showFeeSettings, setShowFeeSettings] = useState(false);
+  const [pixFeePercent, setPixFeePercent] = useState(0.99);
+  const [card1xFeePercent, setCard1xFeePercent] = useState(2.99);
+  const [cardInstallmentBaseFee, setCardInstallmentBaseFee] = useState(3.49);
+  const [cardPerInstallmentFee, setCardPerInstallmentFee] = useState(1.29);
+  const [boletoFixedFee, setBoletoFixedFee] = useState(3.49);
+
+  // Mapa persistente de quantas parcelas de cada pedido já caíram na conta bancária
+  const [paidInstallmentsMap, setPaidInstallmentsMap] = useState<Record<string, number>>(() => {
+    try {
+      const raw = localStorage.getItem('vsc_paid_installments_map');
+      return raw ? JSON.parse(raw) : { 'ord-1002': 2, 'ord-1004': 3 };
+    } catch {
+      return { 'ord-1002': 2, 'ord-1004': 3 };
+    }
+  });
+
+  const handleToggleAnticipationMode = (mode: 'fluxo_mensal' | 'antecipado_d1') => {
+    setAnticipationMode(mode);
+    try {
+      localStorage.setItem('vsc_finance_anticipation_mode', mode);
+    } catch {
+      // ignore
+    }
+    supabaseUpsert(
+      SUPABASE_TABLES.financialSettings,
+      { id: 'default', anticipation_mode: mode },
+      'id'
+    );
+  };
+
+  const handleUpdatePaidInstallments = (orderId: string, count: number, maxInstallments: number) => {
+    const clamped = Math.max(0, Math.min(maxInstallments, count));
+    setPaidInstallmentsMap(prev => {
+      const next = { ...prev, [orderId]: clamped };
+      try {
+        localStorage.setItem('vsc_paid_installments_map', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      supabasePatch(SUPABASE_TABLES.orders, `id=eq.${encodeURIComponent(orderId)}`, {
+        settled_installments: clamped
+      });
+      supabaseUpsert(
+        SUPABASE_TABLES.financialSettings,
+        { id: 'default', settled_installments_map: next },
+        'id'
+      );
+      return next;
+    });
+  };
+
+  // Enriquecimento financeiro de cada pedido
+  const financialOrders = orders.map(order => {
+    const totalInstallments =
+      order.paymentMethod === 'credit_card' ? Math.max(1, order.installments || 1) : 1;
+    const isInstallment = order.paymentMethod === 'credit_card' && totalInstallments > 1;
+    const isCash = !isInstallment; // PIX, Boleto ou Cartão 1x
+    const installmentValue = order.total / totalInstallments;
+
+    // Cálculo de taxas do gateway/maquininha
+    let feeAmount = 0;
+    if (order.paymentMethod === 'pix') {
+      feeAmount = (order.total * pixFeePercent) / 100;
+    } else if (order.paymentMethod === 'boleto') {
+      feeAmount = boletoFixedFee;
+    } else if (order.paymentMethod === 'credit_card') {
+      if (totalInstallments === 1) {
+        feeAmount = (order.total * card1xFeePercent) / 100;
+      } else {
+        const extraAnticipation = anticipationMode === 'antecipado_d1' ? totalInstallments * cardPerInstallmentFee : (totalInstallments * 0.45);
+        const totalFeePct = cardInstallmentBaseFee + extraAnticipation;
+        feeAmount = (order.total * totalFeePct) / 100;
+      }
+    }
+
+    const netTotal = Math.max(0, order.total - feeAmount);
+
+    // Quantas parcelas já entraram no caixa
+    let settledInstallments = 0;
+    if (order.paymentStatus === 'paid') {
+      if (isCash) {
+        settledInstallments = 1;
+      } else if (anticipationMode === 'antecipado_d1') {
+        settledInstallments = totalInstallments;
+      } else {
+        settledInstallments =
+          paidInstallmentsMap[order.id] !== undefined
+            ? Math.min(totalInstallments, paidInstallmentsMap[order.id])
+            : 1;
+      }
+    }
+
+    const remainingInstallments = Math.max(0, totalInstallments - settledInstallments);
+    const receivedGross = settledInstallments * installmentValue;
+    const receivedNet = totalInstallments > 0 ? (settledInstallments / totalInstallments) * netTotal : 0;
+    const futureReceivableGross =
+      order.paymentStatus === 'paid' ? remainingInstallments * installmentValue : 0;
+    const pendingPaymentGross = order.paymentStatus === 'pending' ? order.total : 0;
+
+    return {
+      order,
+      totalInstallments,
+      isInstallment,
+      isCash,
+      installmentValue,
+      feeAmount,
+      netTotal,
+      settledInstallments,
+      remainingInstallments,
+      receivedGross,
+      receivedNet,
+      futureReceivableGross,
+      pendingPaymentGross
+    };
+  });
+
+  // Totais consolidados À Vista vs. Parcelado
+  const cashSalesOrders = financialOrders.filter(f => f.isCash);
+  const installmentSalesOrders = financialOrders.filter(f => f.isInstallment);
+
+  const totalCashSalesGross = cashSalesOrders.reduce((s, f) => s + f.order.total, 0);
+  const totalCashPaidGross = cashSalesOrders
+    .filter(f => f.order.paymentStatus === 'paid')
+    .reduce((s, f) => s + f.order.total, 0);
+
+  const totalInstallmentSalesGross = installmentSalesOrders.reduce((s, f) => s + f.order.total, 0);
+  const totalAvailableInCashNet = financialOrders.reduce((s, f) => s + f.receivedNet, 0);
+  const totalAvailableInCashGross = financialOrders.reduce((s, f) => s + f.receivedGross, 0);
+  const totalFutureInstallmentsToReceive = financialOrders.reduce((s, f) => s + f.futureReceivableGross, 0);
+  const totalPendingOrdersAmount = financialOrders.reduce((s, f) => s + f.pendingPaymentGross, 0);
+  const totalGatewayFeesAmount = financialOrders
+    .filter(f => f.order.paymentStatus === 'paid')
+    .reduce((s, f) => s + f.feeAmount, 0);
+
+  // Cronograma de Recebíveis (Próximos 6 meses para vendas parceladas)
+  const upcomingMonthsLabels = ['Próx. 30 dias', 'Em 60 dias', 'Em 90 dias', 'Em 120 dias', 'Em 150 dias', 'Em 180 dias'];
+  const receivablesSchedule = upcomingMonthsLabels.map((label, monthIdx) => {
+    const monthNumber = monthIdx + 1;
+    let amount = 0;
+    let parcelsCount = 0;
+
+    financialOrders.forEach(f => {
+      if (f.isInstallment && f.order.paymentStatus === 'paid' && f.remainingInstallments >= monthNumber) {
+        amount += f.installmentValue;
+        parcelsCount += 1;
+      }
+    });
+
+    return { label, amount, parcelsCount };
+  });
+
+  const filteredFinancialOrders = financialOrders.filter(f => {
+    if (financeFilter === 'avista' && !f.isCash) return false;
+    if (financeFilter === 'parcelado' && !f.isInstallment) return false;
+    if (financeFilter === 'pendentes' && !(f.order.paymentStatus === 'pending' || f.remainingInstallments > 0)) return false;
+
+    const matchesStatus = orderStatusFilter === 'todos' || f.order.orderStatus === orderStatusFilter;
+    const matchesQuery =
+      orderSearch.trim() === '' ||
+      f.order.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
+      f.order.customer.name.toLowerCase().includes(orderSearch.toLowerCase()) ||
+      f.order.customer.email.toLowerCase().includes(orderSearch.toLowerCase());
+
+    return matchesStatus && matchesQuery;
+  });
+
   // Filtered products list
   const filteredProducts = products.filter(p => {
     const matchesCat = productCategoryFilter === 'todos' || p.category === productCategoryFilter;
@@ -276,14 +993,69 @@ export const AdminPanel: React.FC = () => {
     return matchesCat && matchesQuery;
   });
 
-  // Filtered orders list
-  const filteredOrders = orders.filter(o => {
-    const matchesStatus = orderStatusFilter === 'todos' || o.orderStatus === orderStatusFilter;
-    const matchesQuery = o.orderNumber.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.customer.name.toLowerCase().includes(orderSearch.toLowerCase()) ||
-      o.customer.email.toLowerCase().includes(orderSearch.toLowerCase());
-    return matchesStatus && matchesQuery;
-  });
+  // Exportação de Relatório Financeiro & Pedidos para Excel (CSV com BOM UTF-8)
+  const handleExportFinancialCsv = () => {
+    const headers = [
+      'Pedido',
+      'Data',
+      'Cliente',
+      'E-mail',
+      'Telefone',
+      'Cidade/UF',
+      'Modalidade',
+      'Forma Pagamento',
+      'Parcelas Recebidas',
+      'Total Parcelas',
+      'Valor da Parcela (R$)',
+      'Valor Bruto (R$)',
+      'Taxa Operadora (R$)',
+      'Valor Liquido (R$)',
+      'Ja Recebido em Caixa (R$)',
+      'Saldo Futuro a Receber (R$)',
+      'Status Financeiro',
+      'Status Logistico',
+      'Codigo Rastreio'
+    ];
+
+    const rows = filteredFinancialOrders.map((f) => [
+      f.order.orderNumber,
+      formatDate(f.order.createdAt),
+      `"${(f.order.customer.name || '').replace(/"/g, '""')}"`,
+      f.order.customer.email,
+      f.order.customer.phone,
+      `"${f.order.shippingAddress.localidade}/${f.order.shippingAddress.uf}"`,
+      f.isCash ? 'A Vista' : `Parcelado ${f.totalInstallments}x`,
+      f.order.paymentMethod.toUpperCase(),
+      f.settledInstallments,
+      f.totalInstallments,
+      f.installmentValue.toFixed(2).replace('.', ','),
+      f.order.total.toFixed(2).replace('.', ','),
+      f.feeAmount.toFixed(2).replace('.', ','),
+      f.netTotal.toFixed(2).replace('.', ','),
+      f.receivedGross.toFixed(2).replace('.', ','),
+      f.futureReceivableGross.toFixed(2).replace('.', ','),
+      f.order.paymentStatus === 'paid' ? 'Pago' : 'Pendente',
+      f.order.orderStatus.toUpperCase(),
+      f.order.trackingCode || 'Sem rastreio'
+    ]);
+
+    const csvContent =
+      '\uFEFF' +
+      [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\r\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute(
+      'download',
+      `vasconcelos-financeiro-pedidos-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   // Require admin login
   if (!isAdminAuthenticated) {
@@ -291,28 +1063,49 @@ export const AdminPanel: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-100 text-neutral-900 pb-20">
-      
+    <div className="min-h-screen bg-[#F7F6F2] text-neutral-900 pb-20">
+
       {/* Top Admin Header */}
-      <div className="bg-neutral-900 text-white border-b border-neutral-800">
+      <div className="bg-[#111111] text-white border-b border-neutral-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-xl font-black font-display tracking-tight text-white">
-              vasconcelos <span className="text-pink-500 font-serif-luxury italic font-normal">Presente</span>
+            <span
+              className="text-2xl font-semibold tracking-[0.24em] text-white"
+              style={{ fontFamily: "'Cormorant Garamond', Georgia, serif" }}
+            >
+              VASCONCELOS
             </span>
-            <span className="text-[11px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-pink-600 text-white">
+            <span className="text-[10px] font-bold uppercase tracking-[0.18em] px-2.5 py-1 rounded bg-[#8B1E3F] text-white">
               Admin & Gestão
             </span>
-            <span className="hidden md:inline-flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Sessão Autenticada
+            <span className="hidden md:inline-flex items-center gap-1.5 text-[10px] text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-0.5 rounded font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              {supabaseConnected ? 'Supabase Cloud Ativo (*_vasconcelos)' : 'Sessão Autenticada'}
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              disabled={isSyncingSupabase}
+              onClick={async () => {
+                setIsSyncingSupabase(true);
+                setSupabaseSyncMsg(null);
+                const res = await syncAllToSupabase();
+                setSupabaseSyncMsg(res.message);
+                setIsSyncingSupabase(false);
+                setTimeout(() => setSupabaseSyncMsg(null), 5000);
+              }}
+              className="px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Sincronizar todos os dados com as tabelas *_vasconcelos no Supabase"
+            >
+              {isSyncingSupabase ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              <span>{isSyncingSupabase ? 'Sincronizando...' : 'Sincronizar Supabase'}</span>
+            </button>
+
             <button
               onClick={() => setViewMode('store')}
-              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition flex items-center gap-1.5 cursor-pointer"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               <span>Ver Loja ao Vivo</span>
@@ -320,7 +1113,7 @@ export const AdminPanel: React.FC = () => {
 
             <button
               onClick={adminLogout}
-              className="px-4 py-2 rounded-xl bg-red-600/20 hover:bg-red-600 text-red-200 hover:text-white border border-red-500/30 text-xs font-bold transition flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg bg-red-600/20 hover:bg-red-600 text-red-200 hover:text-white border border-red-500/30 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
               title="Encerrar sessão administrativa"
             >
               <LogOut className="w-3.5 h-3.5" />
@@ -333,62 +1126,643 @@ export const AdminPanel: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 text-xs font-bold uppercase tracking-wider overflow-x-auto">
           <button
             onClick={() => setActiveTab('relatorios')}
-            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
-              activeTab === 'relatorios'
-                ? 'border-pink-500 text-pink-400'
+            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'relatorios'
+                ? 'border-white text-white'
                 : 'border-transparent text-neutral-400 hover:text-white'
-            }`}
+              }`}
           >
-            <TrendingUp className="w-4 h-4" />
-            <span>Relatórios de Vendas</span>
+            <DollarSign className="w-4 h-4" />
+            <span>Financeiro & Pedidos ({orders.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('estoque')}
-            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
-              activeTab === 'estoque'
-                ? 'border-pink-500 text-pink-400'
+            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'estoque'
+                ? 'border-white text-white'
                 : 'border-transparent text-neutral-400 hover:text-white'
-            }`}
+              }`}
           >
             <Package className="w-4 h-4" />
             <span>Estoque & Produtos ({products.length})</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('pedidos')}
-            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
-              activeTab === 'pedidos'
-                ? 'border-pink-500 text-pink-400'
-                : 'border-transparent text-neutral-400 hover:text-white'
-            }`}
-          >
-            <ShoppingBag className="w-4 h-4" />
-            <span>Pedidos dos Clientes ({orders.length})</span>
-          </button>
-
-          <button
             onClick={() => setActiveTab('cupons')}
-            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap ${
-              activeTab === 'cupons'
-                ? 'border-pink-500 text-pink-400'
+            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'cupons'
+                ? 'border-white text-white'
                 : 'border-transparent text-neutral-400 hover:text-white'
-            }`}
+              }`}
           >
             <Tag className="w-4 h-4" />
             <span>Cupons Promocionais</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('cobranca')}
+            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'cobranca'
+                ? 'border-white text-white'
+                : 'border-transparent text-neutral-400 hover:text-white'
+              }`}
+          >
+            <MessageCircle className="w-4 h-4" />
+            <span>Cobrança (WhatsApp & E-mail)</span>
           </button>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        
-        {/* TAB 1: RELATÓRIOS DETALHADOS DE VENDAS MENSAIS */}
+        {supabaseSyncMsg && (
+          <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-semibold flex items-center justify-between">
+            <span>{supabaseSyncMsg}</span>
+            <button onClick={() => setSupabaseSyncMsg(null)} className="text-emerald-700 hover:text-emerald-950 cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* TAB 1: CONTROLE FINANCEIRO (À VISTA vs. PARCELADO) & RELATÓRIOS */}
         {activeTab === 'relatorios' && (
           <div className="space-y-8">
+            {/* ====================================================================
+                PAINEL DE CONTROLE FINANCEIRO: VENDAS À VISTA vs. PARCELADAS
+               ==================================================================== */}
+            <div className="bg-white p-6 sm:p-8 rounded-2xl border border-neutral-200 shadow-xs space-y-6">
+              {/* Top Header & Regime Selector */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-neutral-200">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-700 block mb-1">
+                    Gestão de Caixa & Recebíveis em Tempo Real
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-bold text-neutral-950">
+                    Controle Financeiro: Vendas à Vista vs. Parceladas
+                  </h2>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    Acompanhe o saldo líquido imediato em caixa, o cronograma de parcelas a receber do cartão e os títulos pendentes.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="bg-neutral-100 p-1 rounded-xl flex items-center text-xs font-bold border border-neutral-200">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAnticipationMode('fluxo_mensal')}
+                      className={`px-3 py-2 rounded-lg transition cursor-pointer ${
+                        anticipationMode === 'fluxo_mensal'
+                          ? 'bg-neutral-950 text-white shadow-xs'
+                          : 'text-neutral-600 hover:text-neutral-950'
+                      }`}
+                    >
+                      Fluxo Mensal (Parcela a Parcela)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAnticipationMode('antecipado_d1')}
+                      className={`px-3 py-2 rounded-lg transition cursor-pointer ${
+                        anticipationMode === 'antecipado_d1'
+                          ? 'bg-emerald-700 text-white shadow-xs'
+                          : 'text-neutral-600 hover:text-neutral-950'
+                      }`}
+                    >
+                      Recebimento Antecipado (D+1)
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowFeeSettings(!showFeeSettings)}
+                    className="px-3.5 py-2.5 rounded-xl border border-neutral-300 bg-white hover:bg-neutral-50 text-xs font-bold text-neutral-800 flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    <span>Taxas da Operadora</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportFinancialCsv}
+                    className="px-3.5 py-2.5 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                    title="Exportar planilha financeira e logística compatível com Excel"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>Exportar Planilha (CSV)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Configurable Gateway Fees Drawer */}
+              {showFeeSettings && (
+                <div className="p-4 sm:p-5 rounded-xl bg-neutral-50 border border-neutral-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-neutral-900">
+                      Configuração de Taxas do Gateway / Maquininha (Cálculo de Lucro Líquido)
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => setShowFeeSettings(false)}
+                      className="text-xs text-neutral-500 hover:text-neutral-900 font-bold cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+                    <div>
+                      <label className="text-[11px] font-semibold text-neutral-600 block">Taxa PIX (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={pixFeePercent}
+                        onChange={(e) => setPixFeePercent(parseFloat(e.target.value) || 0)}
+                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-neutral-600 block">Cartão 1x À Vista (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={card1xFeePercent}
+                        onChange={(e) => setCard1xFeePercent(parseFloat(e.target.value) || 0)}
+                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-neutral-600 block">Base Parcelado (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={cardInstallmentBaseFee}
+                        onChange={(e) => setCardInstallmentBaseFee(parseFloat(e.target.value) || 0)}
+                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-neutral-600 block">Juros Antecipação / Parc. (%)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={cardPerInstallmentFee}
+                        onChange={(e) => setCardPerInstallmentFee(parseFloat(e.target.value) || 0)}
+                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-neutral-600 block">Tarifa Boleto (R$)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={boletoFixedFee}
+                        onChange={(e) => setBoletoFixedFee(parseFloat(e.target.value) || 0)}
+                        className="w-full mt-1 bg-white border border-neutral-300 rounded-lg px-2.5 py-1.5 font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 4 Financial Breakdown Cards: À Vista vs. Parcelado vs. Em Caixa vs. A Receber */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Card 1: Total Vendas à Vista */}
+                <div className="p-5 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
+                    <span>Vendas à Vista (PIX / 1x / Boleto)</span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px]">
+                      {cashSalesOrders.length} ped.
+                    </span>
+                  </div>
+                  <p className="text-2xl font-extrabold text-neutral-950">
+                    {formatBRL(totalCashSalesGross)}
+                  </p>
+                  <p className="text-[11px] text-emerald-800 font-medium">
+                    Já compensado à vista: <strong>{formatBRL(totalCashPaidGross)}</strong>
+                  </p>
+                </div>
+
+                {/* Card 2: Total Vendas Parceladas */}
+                <div className="p-5 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
+                    <span>Vendas Parceladas (2x a 10x)</span>
+                    <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10px]">
+                      {installmentSalesOrders.length} ped.
+                    </span>
+                  </div>
+                  <p className="text-2xl font-extrabold text-neutral-950">
+                    {formatBRL(totalInstallmentSalesGross)}
+                  </p>
+                  <p className="text-[11px] text-indigo-800 font-medium">
+                    {anticipationMode === 'antecipado_d1'
+                      ? 'Modalidade ativa: Antecipado em D+1'
+                      : `A receber futuro: ${formatBRL(totalFutureInstallmentsToReceive)}`}
+                  </p>
+                </div>
+
+                {/* Card 3: Saldo Disponível em Caixa Hoje (Líquido) */}
+                <div className="p-5 rounded-xl bg-neutral-950 text-white space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-400">
+                    <span>Disponível em Caixa (Líquido)</span>
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <p className="text-2xl font-extrabold text-white">
+                    {formatBRL(totalAvailableInCashNet)}
+                  </p>
+                  <p className="text-[11px] text-neutral-400">
+                    Bruto liquidado: {formatBRL(totalAvailableInCashGross)} (Taxas: -{formatBRL(totalGatewayFeesAmount)})
+                  </p>
+                </div>
+
+                {/* Card 4: A Receber (Parcelas Futuras + Pendentes) */}
+                <div className="p-5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+                    <span>Total a Receber (Futuro)</span>
+                    <Clock className="w-4 h-4 text-amber-700" />
+                  </div>
+                  <p className="text-2xl font-extrabold text-neutral-950">
+                    {formatBRL(totalFutureInstallmentsToReceive + totalPendingOrdersAmount)}
+                  </p>
+                  <p className="text-[11px] text-amber-900 font-medium">
+                    Parcelas cartão: <strong>{formatBRL(totalFutureInstallmentsToReceive)}</strong> • Cobrança aberta: <strong>{formatBRL(totalPendingOrdersAmount)}</strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Cronograma de Recebíveis (Próximos 6 Meses de Parcelas) */}
+              {anticipationMode === 'fluxo_mensal' && (
+                <div className="p-5 rounded-xl bg-neutral-50 border border-neutral-200 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-900">
+                        Calendário de Recebíveis Mensais (Previsão de Entrada das Parcelas de Cartão)
+                      </h3>
+                      <p className="text-[11px] text-neutral-500">
+                        Valores garantidos que entrarão automaticamente a cada 30 dias referentes às vendas parceladas ainda em aberto:
+                      </p>
+                    </div>
+                    <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-lg">
+                      Saldo Parcelado a Entrar: {formatBRL(totalFutureInstallmentsToReceive)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-1">
+                    {receivablesSchedule.map((slot, idx) => (
+                      <div key={idx} className="bg-white p-3.5 rounded-xl border border-neutral-200">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 block">
+                          {slot.label}
+                        </span>
+                        <p className="text-base font-extrabold text-neutral-950 mt-1">
+                          {formatBRL(slot.amount)}
+                        </p>
+                        <span className="text-[10px] text-indigo-700 font-semibold block mt-0.5">
+                          {slot.parcelsCount} {slot.parcelsCount === 1 ? 'parcela prevista' : 'parcelas previstas'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Tabela Analítica Unificada de Vendas, Logística & Parcelas */}
+              <div className="space-y-4">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0">
+                    {[
+                      { id: 'todos', label: `Todas as Vendas (${financialOrders.length})` },
+                      { id: 'avista', label: `Somente À Vista (${cashSalesOrders.length})` },
+                      { id: 'parcelado', label: `Somente Parcelado (${installmentSalesOrders.length})` },
+                      { id: 'pendentes', label: 'Com Saldo a Receber' }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setFinanceFilter(tab.id as any)}
+                        className={`px-3.5 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                          financeFilter === tab.id
+                            ? 'bg-neutral-950 text-white'
+                            : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Busca e Filtro de Status Logístico Unificados */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                    <div className="relative min-w-[230px]">
+                      <input
+                        type="text"
+                        placeholder="Buscar pedido, cliente ou e-mail..."
+                        value={orderSearch}
+                        onChange={(e) => setOrderSearch(e.target.value)}
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-hidden focus:border-neutral-900"
+                      />
+                      <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-2.5 top-2" />
+                    </div>
+
+                    <select
+                      value={orderStatusFilter}
+                      onChange={(e) => setOrderStatusFilter(e.target.value)}
+                      className="bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-neutral-800 cursor-pointer"
+                    >
+                      <option value="todos">Status Logístico: Todos</option>
+                      <option value="pendente">Pendente</option>
+                      <option value="pago">Pago</option>
+                      <option value="separacao">Em Separação</option>
+                      <option value="enviado">Enviado</option>
+                      <option value="entregue">Entregue</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto border border-neutral-200 rounded-xl">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-neutral-50 text-neutral-600 font-bold uppercase tracking-wider border-b border-neutral-200">
+                      <tr>
+                        <th className="py-3 px-4">Pedido / Cliente / Itens</th>
+                        <th className="py-3 px-4">Modalidade & Plano</th>
+                        <th className="py-3 px-4">Controle de Parcelas</th>
+                        <th className="py-3 px-4">Bruto / Líquido</th>
+                        <th className="py-3 px-4">Caixa vs. A Receber</th>
+                        <th className="py-3 px-4">Logística & Rastreio</th>
+                        <th className="py-3 px-4 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-200">
+                      {filteredFinancialOrders.map((f) => {
+                        const isFullySettled =
+                          f.order.paymentStatus === 'paid' && f.settledInstallments >= f.totalInstallments;
+                        const statusColors: Record<OrderStatus, string> = {
+                          pendente: 'bg-amber-100 text-amber-800',
+                          pago: 'bg-blue-100 text-blue-800',
+                          separacao: 'bg-purple-100 text-purple-800',
+                          enviado: 'bg-indigo-100 text-indigo-800',
+                          entregue: 'bg-emerald-100 text-emerald-800'
+                        };
+
+                        return (
+                          <tr key={f.order.id} className="hover:bg-neutral-50/80 transition align-top">
+                            {/* Pedido, Cliente & Itens */}
+                            <td className="py-3.5 px-4 max-w-[240px]">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono font-bold text-neutral-950">{f.order.orderNumber}</span>
+                                <span className="text-[10px] text-neutral-400">{formatDate(f.order.createdAt)}</span>
+                              </div>
+                              <div className="font-semibold text-neutral-900 mt-0.5">{f.order.customer.name}</div>
+                              <div className="text-[10px] text-neutral-500">
+                                {f.order.customer.email} • {f.order.shippingAddress.localidade}/{f.order.shippingAddress.uf}
+                              </div>
+                              <div className="mt-1.5 pt-1.5 border-t border-neutral-100 space-y-0.5">
+                                {f.order.items.map((it, idx) => (
+                                  <p key={idx} className="text-[11px] text-neutral-700 truncate">
+                                    <span className="font-bold">{it.quantity}x</span> {it.name}
+                                  </p>
+                                ))}
+                              </div>
+                            </td>
+
+                            {/* Modalidade & Plano */}
+                            <td className="py-3.5 px-4">
+                              {f.isCash ? (
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 text-[10px] font-extrabold uppercase tracking-wider">
+                                    À Vista • {f.order.paymentMethod === 'credit_card' ? 'Cartão 1x' : f.order.paymentMethod.toUpperCase()}
+                                  </span>
+                                  <div className="text-[11px] text-neutral-600 font-semibold">
+                                    Parcela Única de {formatBRL(f.order.total)}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 text-[10px] font-extrabold uppercase tracking-wider">
+                                    Parcelado • {f.totalInstallments}x
+                                  </span>
+                                  <div className="font-bold text-indigo-950">
+                                    {f.totalInstallments}x de {formatBRL(f.installmentValue)}
+                                  </div>
+                                  <span className="block text-[10px] text-neutral-400">Sem juros p/ cliente</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Controle de Parcelas Recebidas */}
+                            <td className="py-3.5 px-4">
+                              {f.order.paymentStatus === 'pending' ? (
+                                <span className="px-2 py-1 rounded bg-amber-100 text-amber-900 font-bold text-[10px] uppercase">
+                                  Aguardando Pagamento
+                                </span>
+                              ) : f.isCash ? (
+                                <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  1/1 Liquidado à Vista
+                                </span>
+                              ) : anticipationMode === 'antecipado_d1' ? (
+                                <span className="text-emerald-700 font-bold flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  {f.totalInstallments}/{f.totalInstallments} Antecipado (D+1)
+                                </span>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdatePaidInstallments(
+                                          f.order.id,
+                                          f.settledInstallments - 1,
+                                          f.totalInstallments
+                                        )
+                                      }
+                                      className="w-6 h-6 rounded bg-neutral-200 hover:bg-neutral-300 text-neutral-900 font-bold flex items-center justify-center cursor-pointer"
+                                      title="Reduzir parcela recebida"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="font-mono font-bold text-neutral-900">
+                                      {f.settledInstallments} / {f.totalInstallments} recebidas
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdatePaidInstallments(
+                                          f.order.id,
+                                          f.settledInstallments + 1,
+                                          f.totalInstallments
+                                        )
+                                      }
+                                      className="w-6 h-6 rounded bg-neutral-900 hover:bg-emerald-700 text-white font-bold flex items-center justify-center cursor-pointer"
+                                      title="Confirmar recebimento da próxima parcela"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                  <div className="w-28 bg-neutral-200 h-1.5 rounded-full overflow-hidden">
+                                    <div
+                                      className="bg-indigo-600 h-full rounded-full transition-all"
+                                      style={{
+                                        width: `${Math.round((f.settledInstallments / f.totalInstallments) * 100)}%`
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Bruto / Líquido */}
+                            <td className="py-3.5 px-4">
+                              <div className="font-extrabold text-neutral-950">
+                                Bruto: {formatBRL(f.order.total)}
+                              </div>
+                              <div className="text-[11px] text-emerald-700 font-semibold">
+                                Líquido: {formatBRL(f.netTotal)}
+                              </div>
+                              <div className="text-[10px] text-neutral-400">
+                                Taxa: -{formatBRL(f.feeAmount)}
+                              </div>
+                            </td>
+
+                            {/* Já Recebido vs. Falta Entrar */}
+                            <td className="py-3.5 px-4">
+                              <div className="text-emerald-700 font-bold">
+                                Em caixa: {formatBRL(f.receivedGross)}
+                              </div>
+                              {f.futureReceivableGross > 0 ? (
+                                <div className="text-indigo-700 font-semibold text-[11px]">
+                                  A receber: {formatBRL(f.futureReceivableGross)} ({f.remainingInstallments}x)
+                                </div>
+                              ) : f.pendingPaymentGross > 0 ? (
+                                <div className="text-amber-700 font-semibold text-[11px]">
+                                  Pendente: {formatBRL(f.pendingPaymentGross)}
+                                </div>
+                              ) : (
+                                <div className="text-neutral-400 text-[11px]">100% quitado</div>
+                              )}
+                            </td>
+
+                            {/* Logística & Rastreio */}
+                            <td className="py-3.5 px-4 space-y-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${statusColors[f.order.orderStatus]}`}>
+                                  {f.order.orderStatus}
+                                </span>
+                                <select
+                                  value={f.order.orderStatus}
+                                  onChange={(e) => updateOrderStatus(f.order.id, e.target.value as OrderStatus)}
+                                  className="bg-white border border-neutral-300 rounded-lg px-2 py-1 text-[11px] font-semibold focus:outline-hidden cursor-pointer"
+                                  title="Alterar status logístico do pedido"
+                                >
+                                  <option value="pendente">Pendente</option>
+                                  <option value="pago">Pago</option>
+                                  <option value="separacao">Em Separação</option>
+                                  <option value="enviado">Enviado</option>
+                                  <option value="entregue">Entregue</option>
+                                </select>
+                              </div>
+
+                              {/* Código de Rastreio Editável */}
+                              {editingOrderId === f.order.id ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    value={trackingInput}
+                                    onChange={(e) => setTrackingInput(e.target.value.toUpperCase())}
+                                    placeholder="Ex: BR9928192BR"
+                                    className="w-28 bg-white border border-neutral-300 rounded-lg px-2 py-1 text-[11px] font-mono"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateOrderStatus(f.order.id, f.order.orderStatus, trackingInput);
+                                      setEditingOrderId(null);
+                                    }}
+                                    className="p-1 bg-neutral-900 text-white rounded-lg cursor-pointer"
+                                    title="Salvar rastreio"
+                                  >
+                                    <Save className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 font-mono text-[11px] text-neutral-600">
+                                  <span>{f.order.trackingCode || 'Sem rastreio'}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingOrderId(f.order.id);
+                                      setTrackingInput(f.order.trackingCode || '');
+                                    }}
+                                    className="text-neutral-400 hover:text-neutral-900 cursor-pointer"
+                                    title="Editar código de rastreamento"
+                                  >
+                                    <Edit3 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Ações Financeiras e Cobrança */}
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex flex-col items-end gap-1.5">
+                                {f.order.paymentStatus === 'pending' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => updateOrderStatus(f.order.id, 'pago')}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold transition cursor-pointer whitespace-nowrap"
+                                  >
+                                    Dar Baixa à Vista
+                                  </button>
+                                ) : !isFullySettled && anticipationMode === 'fluxo_mensal' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdatePaidInstallments(
+                                        f.order.id,
+                                        f.totalInstallments,
+                                        f.totalInstallments
+                                      )
+                                    }
+                                    className="px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-indigo-700 text-white text-[11px] font-bold transition cursor-pointer whitespace-nowrap"
+                                  >
+                                    Quitar Parcelas
+                                  </button>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700">
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    Conciliado
+                                  </span>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleSelectBillingCustomer({
+                                      id: `ord-${f.order.id}`,
+                                      name: f.order.customer.name,
+                                      email: f.order.customer.email,
+                                      phone: f.order.customer.phone,
+                                      orderNumber: f.order.orderNumber,
+                                      amount: f.order.total,
+                                      paymentMethod: f.order.paymentMethod,
+                                      pixKey: f.order.pixCopiaECola || 'pix@vasconcelosbeauty.com.br',
+                                      orderStatus: f.order.orderStatus
+                                    });
+                                    setActiveTab('cobranca');
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-100 hover:bg-emerald-50 text-neutral-700 hover:text-emerald-800 border border-neutral-200 text-[10px] font-bold transition cursor-pointer"
+                                  title="Cobrar ou notificar cliente via WhatsApp / E-mail"
+                                >
+                                  <MessageCircle className="w-3 h-3 text-emerald-600" />
+                                  <span>Cobrar / Avisar</span>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
             {/* KPI Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-              
+
               <div className="bg-white p-6 rounded-3xl border border-neutral-200/80 shadow-xs">
                 <div className="flex items-center justify-between text-neutral-500 text-xs font-semibold mb-2">
                   <span>Receita Total do Mês</span>
@@ -482,8 +1856,8 @@ export const AdminPanel: React.FC = () => {
                           className="w-full max-w-[36px] bg-neutral-200 group-hover:bg-gradient-to-t group-hover:from-pink-600 group-hover:to-rose-400 rounded-t-xl transition-all duration-300 relative"
                           style={{
                             height: `${heightPercent}%`,
-                            background: idx === monthlySales.length - 1 
-                              ? 'linear-gradient(to top, #E91E63, #FF4081)' 
+                            background: idx === monthlySales.length - 1
+                              ? 'linear-gradient(to top, #E91E63, #FF4081)'
                               : undefined
                           }}
                         >
@@ -540,7 +1914,7 @@ export const AdminPanel: React.FC = () => {
         {/* TAB 2: GERENCIAMENTO DE ESTOQUE & PRODUTOS */}
         {activeTab === 'estoque' && (
           <div className="space-y-6">
-            
+
             {/* Top Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex flex-1 gap-3 max-w-md">
@@ -623,9 +1997,8 @@ export const AdminPanel: React.FC = () => {
                           </td>
 
                           <td className="py-3 px-4">
-                            <span className={`font-mono font-bold ${
-                              isLowStock ? 'text-amber-600' : 'text-neutral-900'
-                            }`}>
+                            <span className={`font-mono font-bold ${isLowStock ? 'text-amber-600' : 'text-neutral-900'
+                              }`}>
                               {p.stock} un.
                             </span>
                             {isLowStock && (
@@ -678,199 +2051,796 @@ export const AdminPanel: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 3: GERENCIAMENTO DE PEDIDOS DOS CLIENTES */}
-        {activeTab === 'pedidos' && (
+        {/* TAB 4: GERENCIAMENTO DE CUPONS */}
+        {activeTab === 'cupons' && (
           <div className="space-y-6">
-            
-            {/* Orders Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex flex-1 gap-3 max-w-md">
-                <div className="relative flex-1">
+              <div>
+                <h3 className="text-base font-bold text-neutral-900 font-display flex items-center gap-2">
+                  <span>Cupons Promocionais Ativos ({coupons.length})</span>
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Adicione, edite ou exclua cupons de desconto. Ao criar um novo cupom, todos os{' '}
+                  <strong>{uniqueCustomerEmails.length} cliente(s) cadastrado(s)</strong> recebem um aviso por e-mail automaticamente.
+                </p>
+              </div>
+
+              <button
+                onClick={handleOpenAddCoupon}
+                className="px-4 py-2.5 rounded-2xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold flex items-center gap-2 shadow-md shadow-pink-600/20 transition cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Adicionar Novo Cupom</span>
+              </button>
+            </div>
+
+            {/* Feedback Banner for Coupon Actions & Email Dispatch */}
+            {couponFeedback && (
+              <div
+                className={`p-4 rounded-2xl border text-xs flex flex-col gap-2 animate-in fade-in ${couponFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                  }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-bold">
+                    {couponFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                    )}
+                    <span>{couponFeedback.message}</span>
+                  </div>
+                  <button
+                    onClick={() => setCouponFeedback(null)}
+                    className="text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {couponFeedback.emails && couponFeedback.emails.length > 0 && (
+                  <div className="pl-6 text-[11px] text-emerald-800 space-y-1">
+                    <p className="font-semibold flex items-center gap-1">
+                      <Mail className="w-3.5 h-3.5" />
+                      Destinatários notificados por e-mail:
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {couponFeedback.emails.map((emailAddr) => (
+                        <span
+                          key={emailAddr}
+                          className="bg-white/90 border border-emerald-200 px-2 py-0.5 rounded-md font-mono text-[10px]"
+                        >
+                          {emailAddr}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {coupons.length === 0 ? (
+              <div className="bg-white p-12 rounded-3xl border border-neutral-200 text-center space-y-3">
+                <Tag className="w-8 h-8 text-pink-500 mx-auto" />
+                <p className="text-sm font-bold text-neutral-800">Nenhum cupom cadastrado no momento</p>
+                <p className="text-xs text-neutral-500">
+                  Clique em "Adicionar Novo Cupom" para criar uma campanha e avisar seus clientes por e-mail.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {coupons.map((c) => (
+                  <div
+                    key={c.code}
+                    className="bg-white p-5 rounded-3xl border border-pink-100 hover:border-pink-300 shadow-xs transition flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-sm font-black bg-pink-100 text-pink-700 px-3 py-1 rounded-xl tracking-wide">
+                          {c.code}
+                        </span>
+                        <span className="text-xs font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                          {c.discountType === 'percentage' ? `${c.value}% OFF` : `${formatBRL(c.value)} OFF`}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-neutral-600 leading-relaxed">{c.description}</p>
+                    </div>
+
+                    <div className="pt-3 border-t border-neutral-100 space-y-3">
+                      <div className="flex items-center justify-between text-[11px] text-neutral-500">
+                        <span>Compra mínima:</span>
+                        <strong className="text-neutral-900">
+                          {c.minOrderValue > 0 ? formatBRL(c.minOrderValue) : 'Sem mínimo'}
+                        </strong>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          disabled={sendingCouponCode === c.code}
+                          onClick={() => handleResendCouponEmail(c)}
+                          className="flex-1 py-1.5 px-2.5 rounded-xl bg-neutral-100 hover:bg-pink-50 text-neutral-700 hover:text-pink-700 text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                          title="Enviar e-mail deste cupom para todos os clientes cadastrados"
+                        >
+                          {sendingCouponCode === c.code ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Enviando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-3.5 h-3.5" />
+                              <span>Notificar Clientes</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditCoupon(c)}
+                          className="p-2 rounded-xl border border-neutral-200 text-neutral-600 hover:text-pink-600 hover:border-pink-200 hover:bg-pink-50 transition cursor-pointer"
+                          title="Editar Cupom"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Deseja realmente excluir o cupom "${c.code}"?`)) {
+                              deleteCoupon(c.code);
+                              setCouponFeedback({
+                                type: 'success',
+                                message: `Cupom ${c.code} excluído com sucesso.`
+                              });
+                            }
+                          }}
+                          className="p-2 rounded-xl border border-neutral-200 text-neutral-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
+                          title="Excluir Cupom"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 5: FERRAMENTA DE COBRANÇA POR WHATSAPP E E-MAIL */}
+        {activeTab === 'cobranca' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-bold text-neutral-900 font-display flex items-center gap-2">
+                  <MessageCircle className="w-5 h-5 text-pink-600" />
+                  <span>Central de Cobrança & Régua Automática (WhatsApp e E-mail)</span>
+                </h3>
+                <p className="text-xs text-neutral-500">
+                  Automatize o envio de cobranças para pedidos pendentes ou selecione um cliente abaixo para cobrança imediata.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsAutoSettingsOpen(!isAutoSettingsOpen)}
+                  className="px-3.5 py-2 rounded-2xl border border-neutral-300 bg-white hover:bg-neutral-50 text-neutral-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-pink-600" />
+                  <span>Configurar API WhatsApp & Gmail</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isRunningBatchAuto}
+                  onClick={() => handleRunAutomatedRuleNow('batch_manual')}
+                  className="px-4 py-2 rounded-2xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-pink-600/20 transition cursor-pointer disabled:opacity-60"
+                >
+                  {isRunningBatchAuto ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Disparando Régua...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>
+                        Disparar Régua nos Pendentes ({pendingOrdersList.length || orders.length})
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* PAINEL DA RÉGUA DE AUTOMAÇÃO INTELIGENTE (3 ETAPAS) */}
+            <div className="bg-gradient-to-r from-neutral-900 via-stone-900 to-neutral-950 text-white rounded-3xl p-5 sm:p-6 border border-neutral-800 shadow-lg space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-3 h-3 rounded-full ${autoConfig.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-neutral-500'
+                      }`}
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-black font-display tracking-wide">
+                        Régua de Cobrança Automática Inteligente
+                      </h4>
+                      <span
+                        className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${autoConfig.enabled
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-neutral-800 text-neutral-400'
+                          }`}
+                      >
+                        {autoConfig.enabled ? 'Ativa 24h' : 'Pausada'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400">
+                      Remetente oficial configurado: <strong className="text-pink-300">{autoConfig.senderEmail}</strong> • Para automaticamente quando o pedido muda para <strong>Pago</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="inline-flex items-center gap-2 cursor-pointer bg-white/10 hover:bg-white/15 px-3.5 py-2 rounded-2xl text-xs font-bold transition">
+                  <input
+                    type="checkbox"
+                    checked={autoConfig.enabled}
+                    onChange={(e) => handleUpdateAutoConfig({ enabled: e.target.checked })}
+                    className="accent-pink-500 w-4 h-4"
+                  />
+                  <span>{autoConfig.enabled ? 'Automação Ligada' : 'Ligar Automação'}</span>
+                </label>
+              </div>
+
+              {/* As 3 Etapas Recomendadas */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <label className="p-3.5 rounded-2xl bg-white/5 border border-white/10 hover:border-pink-500/40 flex items-start gap-3 cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={autoConfig.autoOnCheckout}
+                    onChange={(e) => handleUpdateAutoConfig({ autoOnCheckout: e.target.checked })}
+                    className="mt-0.5 accent-pink-500"
+                  />
+                  <div className="space-y-1">
+                    <span className="font-bold text-white block">
+                      1. Disparo Imediato no Checkout
+                    </span>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      Envia a Chave Pix Copia e Cola por E-mail e WhatsApp no instante em que o cliente finaliza o pedido.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="p-3.5 rounded-2xl bg-white/5 border border-white/10 hover:border-pink-500/40 flex items-start gap-3 cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={autoConfig.reminder30m}
+                    onChange={(e) => handleUpdateAutoConfig({ reminder30m: e.target.checked })}
+                    className="mt-0.5 accent-pink-500"
+                  />
+                  <div className="space-y-1">
+                    <span className="font-bold text-white block">
+                      2. Lembrete de 30 Minutos
+                    </span>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      Se o pedido continuar <code className="text-amber-300">pendente</code> após 30 min, avisa que os produtos já estão separados aguardando o Pix.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="p-3.5 rounded-2xl bg-white/5 border border-white/10 hover:border-pink-500/40 flex items-start gap-3 cursor-pointer transition">
+                  <input
+                    type="checkbox"
+                    checked={autoConfig.reminder24h}
+                    onChange={(e) => handleUpdateAutoConfig({ reminder24h: e.target.checked })}
+                    className="mt-0.5 accent-pink-500"
+                  />
+                  <div className="space-y-1">
+                    <span className="font-bold text-white block">
+                      3. Aviso de Vencimento (24h)
+                    </span>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed">
+                      Último lembrete automático enviado após 24h em aberto antes de liberar a reserva do estoque.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Gaveta de Configuração de Credenciais (Gmail SMTP + WhatsApp API / Webhook) */}
+              {isAutoSettingsOpen && (
+                <div className="pt-4 border-t border-white/10 space-y-4 animate-in fade-in">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="text-[11px] font-bold text-neutral-300">
+                        E-mail Remetente da Loja (Gmail)
+                      </label>
+                      <input
+                        type="email"
+                        value={autoConfig.senderEmail}
+                        onChange={(e) =>
+                          setAutoConfig({ ...autoConfig, senderEmail: e.target.value })
+                        }
+                        placeholder="sandravasconcellossillva@gmail.com"
+                        className="w-full mt-1 bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-xs text-white outline-hidden focus:border-pink-500"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-pink-300">
+                          Senha de App do Gmail (16 letras — SMTP Direto)
+                        </label>
+                        <a
+                          href="https://myaccount.google.com/apppasswords"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-amber-300 hover:underline flex items-center gap-1"
+                        >
+                          <span>Gerar no Google</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                      <input
+                        type="password"
+                        value={autoConfig.smtpAppPassword}
+                        onChange={(e) =>
+                          setAutoConfig({ ...autoConfig, smtpAppPassword: e.target.value })
+                        }
+                        placeholder="Ex: abcd efgh ijkl mnop (faz sair dos Enviados automaticamente)"
+                        className="w-full mt-1 bg-neutral-900 border border-pink-500/50 rounded-xl px-3 py-2 text-xs text-white font-mono outline-hidden focus:border-pink-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-neutral-300">
+                        URL da API de WhatsApp (Evolution API / Z-API) — Opcional
+                      </label>
+                      <input
+                        type="url"
+                        value={autoConfig.whatsappApiUrl}
+                        onChange={(e) =>
+                          setAutoConfig({ ...autoConfig, whatsappApiUrl: e.target.value })
+                        }
+                        placeholder="https://api.z-api.io/instances/.../token/.../send-text"
+                        className="w-full mt-1 bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-xs text-white font-mono outline-hidden focus:border-pink-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-neutral-300">
+                        Token / API Key do WhatsApp — Opcional
+                      </label>
+                      <input
+                        type="password"
+                        value={autoConfig.whatsappApiToken}
+                        onChange={(e) =>
+                          setAutoConfig({ ...autoConfig, whatsappApiToken: e.target.value })
+                        }
+                        placeholder="Token de autenticação da instância"
+                        className="w-full mt-1 bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-xs text-white font-mono outline-hidden focus:border-pink-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-neutral-300">
+                        Webhook de Automação (n8n / Make / Zapier) — Opcional
+                      </label>
+                      <input
+                        type="url"
+                        value={autoConfig.whatsappWebhookUrl}
+                        onChange={(e) =>
+                          setAutoConfig({ ...autoConfig, whatsappWebhookUrl: e.target.value })
+                        }
+                        placeholder="https://seu-n8n.com/webhook/cobranca-vasconcelos"
+                        className="w-full mt-1 bg-neutral-900 border border-neutral-700 rounded-xl px-3 py-2 text-xs text-white font-mono outline-hidden focus:border-pink-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsAutoSettingsOpen(false)}
+                      className="px-3.5 py-1.5 rounded-xl text-xs text-neutral-400 hover:text-white cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleUpdateAutoConfig(autoConfig, true)}
+                      className="px-4 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Salvar Integração</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {billingFeedback && (
+              <div
+                className={`p-4 rounded-2xl border text-xs flex items-center justify-between animate-in fade-in ${billingFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                  }`}
+              >
+                <div className="flex items-center gap-2 font-bold">
+                  {billingFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{billingFeedback.message}</span>
+                </div>
+                <button
+                  onClick={() => setBillingFeedback(null)}
+                  className="text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+              {/* COLUNA ESQUERDA: LISTA DE CLIENTES CADASTRADOS E PEDIDOS */}
+              <div className="lg:col-span-5 bg-white rounded-3xl border border-neutral-200 p-5 shadow-xs flex flex-col space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-pink-600" />
+                    <span>Cadastros & Pedidos ({billingDirectory.length})</span>
+                  </h4>
+                  <span className="text-[10px] text-neutral-400">Clique para preencher</span>
+                </div>
+
+                <div className="relative">
                   <input
                     type="text"
-                    placeholder="Buscar por número do pedido, cliente..."
-                    value={orderSearch}
-                    onChange={(e) => setOrderSearch(e.target.value)}
-                    className="w-full bg-white border border-neutral-300 rounded-xl pl-9 pr-3 py-2 text-xs"
+                    value={billingSearch}
+                    onChange={(e) => setBillingSearch(e.target.value)}
+                    placeholder="Buscar cliente por nome, telefone, e-mail ou pedido..."
+                    className="w-full bg-neutral-50 border border-neutral-300 rounded-xl pl-9 pr-3 py-2 text-xs outline-hidden focus:border-pink-500 focus:bg-white"
                   />
                   <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-2.5" />
                 </div>
 
-                <select
-                  value={orderStatusFilter}
-                  onChange={(e) => setOrderStatusFilter(e.target.value)}
-                  className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs font-semibold"
-                >
-                  <option value="todos">Todos os Status</option>
-                  <option value="pendente">Pendente</option>
-                  <option value="pago">Pago</option>
-                  <option value="separacao">Em Separação</option>
-                  <option value="enviado">Enviado</option>
-                  <option value="entregue">Entregue</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Orders Table */}
-            <div className="bg-white rounded-3xl border border-neutral-200 shadow-xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-neutral-50 text-neutral-500 font-bold uppercase tracking-wider border-b border-neutral-200">
-                    <tr>
-                      <th className="py-3.5 px-4">Pedido / Data</th>
-                      <th className="py-3.5 px-4">Cliente</th>
-                      <th className="py-3.5 px-4">Itens</th>
-                      <th className="py-3.5 px-4">Total</th>
-                      <th className="py-3.5 px-4">Rastreamento</th>
-                      <th className="py-3.5 px-4">Status Atual</th>
-                      <th className="py-3.5 px-4 text-right">Alterar Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-100">
-                    {filteredOrders.map((order) => {
-                      const statusColors: Record<OrderStatus, string> = {
-                        pendente: 'bg-amber-100 text-amber-800',
-                        pago: 'bg-blue-100 text-blue-800',
-                        separacao: 'bg-purple-100 text-purple-800',
-                        enviado: 'bg-indigo-100 text-indigo-800',
-                        entregue: 'bg-emerald-100 text-emerald-800'
-                      };
+                <div className="divide-y divide-neutral-100 max-h-[460px] overflow-y-auto pr-1">
+                  {billingDirectory
+                    .filter((item) => {
+                      const q = billingSearch.trim().toLowerCase();
+                      if (!q) return true;
+                      return (
+                        item.name.toLowerCase().includes(q) ||
+                        item.email.toLowerCase().includes(q) ||
+                        item.phone.toLowerCase().includes(q) ||
+                        (item.orderNumber || '').toLowerCase().includes(q)
+                      );
+                    })
+                    .map((item) => {
+                      const isSelected =
+                        billEmail.toLowerCase() === item.email.toLowerCase() &&
+                        (billOrderNum === (item.orderNumber || ''));
 
                       return (
-                        <tr key={order.id} className="hover:bg-neutral-50 transition">
-                          <td className="py-3 px-4">
-                            <span className="font-mono font-bold text-neutral-900 block">
-                              {order.orderNumber}
-                            </span>
-                            <span className="text-[10px] text-neutral-400">
-                              {formatDate(order.createdAt)}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-4">
-                            <p className="font-bold text-neutral-900">{order.customer.name}</p>
-                            <p className="text-[11px] text-neutral-500">{order.customer.email}</p>
-                            <p className="text-[10px] text-neutral-400">{order.shippingAddress.localidade}/{order.shippingAddress.uf}</p>
-                          </td>
-
-                          <td className="py-3 px-4">
-                            <div className="space-y-0.5">
-                              {order.items.map((it, i) => (
-                                <p key={i} className="text-neutral-700 truncate max-w-xs">
-                                  {it.quantity}x {it.name}
-                                </p>
-                              ))}
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelectBillingCustomer(item)}
+                          className={`w-full text-left p-3.5 rounded-2xl transition flex items-start justify-between gap-2 cursor-pointer ${isSelected
+                              ? 'bg-pink-50/90 border border-pink-200'
+                              : 'hover:bg-neutral-50'
+                            }`}
+                        >
+                          <div className="space-y-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-neutral-900 truncate">
+                                {item.name}
+                              </span>
+                              {item.orderNumber ? (
+                                <span className="font-mono text-[10px] font-bold bg-neutral-900 text-white px-2 py-0.5 rounded-md">
+                                  {item.orderNumber}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-bold bg-pink-100 text-pink-700 px-2 py-0.5 rounded-md">
+                                  Cliente Cadastrado
+                                </span>
+                              )}
                             </div>
-                          </td>
 
-                          <td className="py-3 px-4">
-                            <span className="font-bold text-neutral-900 block">{formatBRL(order.total)}</span>
-                            <span className="text-[10px] text-neutral-500 uppercase font-semibold">
-                              {order.paymentMethod === 'credit_card' ? 'Cartão de Crédito' : order.paymentMethod.toUpperCase()}
+                            <p className="text-[11px] text-neutral-600 flex items-center gap-1.5 truncate">
+                              <Phone className="w-3 h-3 text-emerald-600 shrink-0" />
+                              <span>{item.phone || 'Sem telefone no cadastro'}</span>
+                            </p>
+
+                            <p className="text-[11px] text-neutral-500 flex items-center gap-1.5 truncate">
+                              <Mail className="w-3 h-3 text-pink-600 shrink-0" />
+                              <span className="truncate">{item.email}</span>
+                            </p>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <span className="text-xs font-black text-neutral-900 block">
+                              {formatBRL(item.amount)}
                             </span>
-                          </td>
-
-                          <td className="py-3 px-4">
-                            {editingOrderId === order.id ? (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="text"
-                                  value={trackingInput}
-                                  onChange={(e) => setTrackingInput(e.target.value.toUpperCase())}
-                                  placeholder="Código (ex: NL123BR)"
-                                  className="w-28 bg-white border border-neutral-300 rounded-lg px-2 py-1 text-xs font-mono"
-                                />
-                                <button
-                                  onClick={() => {
-                                    updateOrderStatus(order.id, order.orderStatus, trackingInput);
-                                    setEditingOrderId(null);
-                                  }}
-                                  className="p-1 bg-pink-600 text-white rounded-lg"
-                                >
-                                  <Save className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5 font-mono text-neutral-700">
-                                <span>{order.trackingCode || 'Sem rastreio'}</span>
-                                <button
-                                  onClick={() => {
-                                    setEditingOrderId(order.id);
-                                    setTrackingInput(order.trackingCode || '');
-                                  }}
-                                  className="text-neutral-400 hover:text-pink-600"
-                                  title="Editar código de rastreamento"
-                                >
-                                  <Edit3 className="w-3 h-3" />
-                                </button>
-                              </div>
+                            {item.orderStatus && item.orderStatus !== 'cadastro' && (
+                              <span className="text-[10px] uppercase font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                                {item.orderStatus}
+                              </span>
                             )}
-                          </td>
-
-                          <td className="py-3 px-4">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusColors[order.orderStatus]}`}>
-                              {order.orderStatus}
-                            </span>
-                          </td>
-
-                          <td className="py-3 px-4 text-right">
-                            <select
-                              value={order.orderStatus}
-                              onChange={(e) => updateOrderStatus(order.id, e.target.value as OrderStatus)}
-                              className="bg-white border border-neutral-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-hidden cursor-pointer"
-                            >
-                              <option value="pendente">Pendente</option>
-                              <option value="pago">Pago</option>
-                              <option value="separacao">Em Separação</option>
-                              <option value="enviado">Enviado</option>
-                              <option value="entregue">Entregue</option>
-                            </select>
-                          </td>
-                        </tr>
+                          </div>
+                        </button>
                       );
                     })}
-                  </tbody>
-                </table>
+                </div>
               </div>
-            </div>
 
-          </div>
-        )}
-
-        {/* TAB 4: GERENCIAMENTO DE CUPONS */}
-        {activeTab === 'cupons' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-neutral-900 font-display">
-                  Cupons Promocionais Ativos
-                </h3>
-                <p className="text-xs text-neutral-500">
-                  Configure descontos para alavancar as vendas nas lives e campanhas
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {coupons.map((c) => (
-                <div key={c.code} className="bg-white p-5 rounded-3xl border border-pink-100 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-sm font-black bg-pink-100 text-pink-700 px-3 py-1 rounded-xl">
-                      {c.code}
-                    </span>
-                    <span className="text-xs font-bold text-neutral-500">
-                      {c.discountType === 'percentage' ? `${c.value}% OFF` : `${formatBRL(c.value)} OFF`}
-                    </span>
+              {/* COLUNA DIREITA: FORMULÁRIO DE COBRANÇA E MENSAGEM */}
+              <div className="lg:col-span-7 bg-white rounded-3xl border border-neutral-200 p-6 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                  <div>
+                    <h4 className="text-sm font-bold text-neutral-900 font-display">
+                      Dados da Cobrança do Cliente
+                    </h4>
+                    <p className="text-[11px] text-neutral-400">
+                      Preenchido automaticamente pelo cadastro ou editável manualmente
+                    </p>
                   </div>
 
-                  <p className="text-xs text-neutral-600">{c.description}</p>
-                  
-                  <div className="pt-2 border-t border-neutral-100 text-[11px] text-neutral-400">
-                    Compra mínima: <strong>{formatBRL(c.minOrderValue)}</strong>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                      Modelo:
+                    </span>
+                    {[
+                      { id: 'lembrete', label: 'Lembrete' },
+                      { id: 'pix', label: 'Chave Pix' },
+                      { id: 'vencimento', label: 'Vencimento' }
+                    ].map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => handleApplyTemplate(t.id as 'lembrete' | 'pix' | 'vencimento')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${billTemplate === t.id
+                            ? 'bg-pink-600 text-white'
+                            : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                          }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
+
+                {/* Campos do Cliente (Nome, Telefone do Cadastro, E-mail do Cadastro) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="font-bold text-neutral-700">Nome do Cliente *</label>
+                    <input
+                      type="text"
+                      value={billName}
+                      onChange={(e) => setBillName(e.target.value)}
+                      placeholder="Nome completo"
+                      className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs focus:bg-white focus:border-pink-500 outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-neutral-700 flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-emerald-600" />
+                      <span>WhatsApp do Cadastro *</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={billPhone}
+                      onChange={(e) => setBillPhone(e.target.value)}
+                      placeholder="(11) 99999-9999"
+                      className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs font-mono focus:bg-white focus:border-emerald-500 outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-neutral-700 flex items-center gap-1">
+                      <Mail className="w-3 h-3 text-pink-600" />
+                      <span>E-mail do Cadastro *</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={billEmail}
+                      onChange={(e) => setBillEmail(e.target.value)}
+                      placeholder="cliente@email.com"
+                      className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs focus:bg-white focus:border-pink-500 outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                {/* Campos do Pedido / Valor / Vencimento / Pix */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="font-bold text-neutral-700">Nº do Pedido / Referência</label>
+                    <input
+                      type="text"
+                      value={billOrderNum}
+                      onChange={(e) => setBillOrderNum(e.target.value)}
+                      placeholder="Ex: VSC-98214"
+                      className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs font-mono focus:bg-white focus:border-pink-500 outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-neutral-700">Valor da Cobrança (R$) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={billAmount}
+                      onChange={(e) => setBillAmount(e.target.value)}
+                      placeholder="149.90"
+                      className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-pink-700 focus:bg-white focus:border-pink-500 outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-neutral-700">Vencimento</label>
+                    <input
+                      type="text"
+                      value={billDueDate}
+                      onChange={(e) => setBillDueDate(e.target.value)}
+                      placeholder="Ex: Hoje, 30/10/2026"
+                      className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs focus:bg-white focus:border-pink-500 outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-xs">
+                  <label className="font-bold text-neutral-700">
+                    Chave Pix / Pix Copia e Cola / Link de Pagamento
+                  </label>
+                  <input
+                    type="text"
+                    value={billPixKey}
+                    onChange={(e) => setBillPixKey(e.target.value)}
+                    placeholder="pix@vasconcelosbeauty.com.br"
+                    className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs font-mono focus:bg-white focus:border-pink-500 outline-hidden"
+                  />
+                </div>
+
+                {/* Mensagem da Cobrança */}
+                <div className="text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-neutral-700 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-pink-600" />
+                      <span>Mensagem de Cobrança (WhatsApp & E-mail)</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(currentComposedMessage);
+                        setBillingFeedback({
+                          type: 'success',
+                          message: 'Texto da cobrança copiado para a área de transferência!'
+                        });
+                      }}
+                      className="text-[11px] font-bold text-pink-600 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Copy className="w-3 h-3" />
+                      <span>Copiar Texto</span>
+                    </button>
+                  </div>
+
+                  <textarea
+                    rows={6}
+                    value={currentComposedMessage}
+                    onChange={(e) => setBillCustomMessage(e.target.value)}
+                    className="w-full bg-neutral-50 border border-neutral-300 rounded-2xl p-3.5 text-xs text-neutral-800 leading-relaxed focus:bg-white focus:border-pink-500 outline-hidden"
+                  />
+                </div>
+
+                {/* Action Buttons: WhatsApp, Email, or Both */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleSendWhatsAppBilling}
+                    className="py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    <span>Cobrar por WhatsApp</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isSendingBillingEmail}
+                    onClick={handleSendEmailBilling}
+                    className="py-3 px-4 rounded-2xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md shadow-pink-600/20 transition cursor-pointer disabled:opacity-60"
+                  >
+                    {isSendingBillingEmail ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Enviando E-mail...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Mail className="w-4 h-4" />
+                        <span>Cobrar por E-mail</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isSendingBillingEmail}
+                    onClick={handleSendBothBilling}
+                    className="py-3 px-4 rounded-2xl bg-neutral-900 hover:bg-black text-white text-xs font-extrabold flex items-center justify-center gap-2 shadow-md transition cursor-pointer disabled:opacity-60"
+                  >
+                    <Send className="w-4 h-4 text-amber-400" />
+                    <span>Enviar nos Dois</span>
+                  </button>
+                </div>
+              </div>
             </div>
+
+            {/* Histórico de Cobranças Enviadas */}
+            {billingLogs.length > 0 && (
+              <div className="bg-white rounded-3xl border border-neutral-200 p-5 shadow-xs space-y-3">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-neutral-700 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-pink-600" />
+                  <span>Histórico Recente de Cobranças Enviadas ({billingLogs.length})</span>
+                </h4>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-neutral-50 text-neutral-500 font-bold uppercase border-b border-neutral-200">
+                      <tr>
+                        <th className="py-2.5 px-3">Data / Hora</th>
+                        <th className="py-2.5 px-3">Cliente</th>
+                        <th className="py-2.5 px-3">Contato Utilizado</th>
+                        <th className="py-2.5 px-3">Referência</th>
+                        <th className="py-2.5 px-3">Valor</th>
+                        <th className="py-2.5 px-3">Canal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {billingLogs.slice(0, 8).map((log) => (
+                        <tr key={log.id} className="hover:bg-neutral-50">
+                          <td className="py-2.5 px-3 text-neutral-500 font-mono text-[11px]">
+                            {log.timestamp}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-neutral-900">
+                            {log.customerName}
+                          </td>
+                          <td className="py-2.5 px-3 text-[11px] text-neutral-600">
+                            {log.channel === 'whatsapp'
+                              ? log.customerPhone
+                              : log.channel === 'email'
+                                ? log.customerEmail
+                                : `${log.customerPhone} / ${log.customerEmail}`}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-[11px]">
+                            {log.orderNumber}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-neutral-900">
+                            {formatBRL(log.amount)}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${log.channel === 'whatsapp'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-pink-100 text-pink-800'
+                                }`}
+                            >
+                              {log.channel === 'whatsapp' ? 'WhatsApp' : 'E-mail'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -972,11 +2942,10 @@ export const AdminPanel: React.FC = () => {
                 {/* Feedback da extração */}
                 {extractFeedback && (
                   <div
-                    className={`flex items-start gap-2 p-3 rounded-xl text-xs ${
-                      extractFeedback.type === 'success'
+                    className={`flex items-start gap-2 p-3 rounded-xl text-xs ${extractFeedback.type === 'success'
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                         : 'bg-rose-50 text-rose-800 border border-rose-200'
-                    }`}
+                      }`}
                   >
                     {extractFeedback.type === 'success' ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -1209,6 +3178,154 @@ export const AdminPanel: React.FC = () => {
                     <span>Salvar Produto</span>
                   </button>
                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Coupon Add / Edit Modal */}
+      {isCouponModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="relative bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-pink-50 flex items-center justify-center text-pink-600">
+                  <Percent className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-neutral-900 font-display">
+                    {editingCouponCode ? `Editar Cupom (${editingCouponCode})` : 'Novo Cupom de Desconto'}
+                  </h3>
+                  <p className="text-[11px] text-neutral-400">
+                    {editingCouponCode
+                      ? 'Atualize as regras do cupom promocional'
+                      : 'Crie um cupom e notifique os clientes cadastrados por e-mail'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCouponModalOpen(false)}
+                className="p-1.5 rounded-full text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCoupon} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-neutral-700">Código do Cupom *</label>
+                <input
+                  type="text"
+                  required
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/\s+/g, ''))}
+                  placeholder="Ex: LUXO15, MAES20, VIP30"
+                  className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3.5 py-2.5 text-sm font-mono font-black uppercase text-pink-700 focus:bg-white focus:ring-2 focus:ring-pink-500 outline-hidden"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="font-bold text-neutral-700">Tipo de Desconto</label>
+                  <select
+                    value={couponDiscountType}
+                    onChange={(e) => setCouponDiscountType(e.target.value as 'percentage' | 'fixed')}
+                    className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2.5 text-xs font-semibold focus:bg-white outline-hidden"
+                  >
+                    <option value="percentage">Porcentagem (%)</option>
+                    <option value="fixed">Valor Fixo (R$)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700">
+                    {couponDiscountType === 'percentage' ? 'Desconto (%) *' : 'Desconto (R$) *'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    required
+                    value={couponValue}
+                    onChange={(e) => setCouponValue(e.target.value)}
+                    placeholder={couponDiscountType === 'percentage' ? 'Ex: 15' : 'Ex: 25.00'}
+                    className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2.5 text-xs font-mono font-bold focus:bg-white outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700">Compra Mínima (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={couponMinOrder}
+                    onChange={(e) => setCouponMinOrder(e.target.value)}
+                    placeholder="Ex: 100.00"
+                    className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2.5 text-xs font-mono focus:bg-white outline-hidden"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-700">Descrição / Regra do Cupom *</label>
+                <textarea
+                  rows={2}
+                  required
+                  value={couponDescription}
+                  onChange={(e) => setCouponDescription(e.target.value)}
+                  placeholder="Ex: 15% de desconto especial em toda a linha de perfumaria fina!"
+                  className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs focus:bg-white outline-hidden"
+                />
+              </div>
+
+              {!editingCouponCode && (
+                <label className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-pink-50/70 border border-pink-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sendEmailOnCreate}
+                    onChange={(e) => setSendEmailOnCreate(e.target.checked)}
+                    className="mt-0.5 accent-pink-600"
+                  />
+                  <div className="space-y-0.5">
+                    <span className="font-bold text-pink-900 flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-pink-600" />
+                      Enviar e-mail automático para clientes cadastrados ({uniqueCustomerEmails.length})
+                    </span>
+                    <p className="text-[11px] text-neutral-600">
+                      Todos os clientes cadastrados receberão um e-mail com o código, valor do desconto e regras deste novo cupom.
+                    </p>
+                  </div>
+                </label>
+              )}
+
+              <div className="pt-3 border-t border-neutral-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCouponModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-neutral-600 hover:bg-neutral-100 font-semibold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingCoupon}
+                  className="inline-flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-bold shadow-xs hover:shadow-md transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {isSavingCoupon ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Salvando e Enviando E-mail...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{editingCouponCode ? 'Salvar Alterações' : 'Criar Cupom e Enviar E-mail'}</span>
+                    </>
+                  )}
+                </button>
               </div>
             </form>
           </div>

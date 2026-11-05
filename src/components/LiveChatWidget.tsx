@@ -1,25 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  MessageCircle, 
+  MessageSquare, 
   X, 
   Send, 
-  Sparkles, 
-  UserCheck, 
-  Bot, 
-  ChevronRight,
   Clock,
-  ShieldCheck,
-  ShoppingBag,
-  Gift,
-  Tag,
-  Truck,
-  HelpCircle,
-  Heart
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useStore } from '../context/StoreContext';
-import { LisaAvatar } from './LisaAvatar';
-import { FloatingHearts, PawBubble } from './LisaDecor';
 
 interface ChatMessage {
   id: string;
@@ -30,18 +18,18 @@ interface ChatMessage {
 }
 
 export const LiveChatWidget: React.FC = () => {
-  const { isChatOpen, setIsChatOpen, orders, products, coupons, setSelectedCategory, setViewMode } = useStore();
+  const { isChatOpen, setIsChatOpen, orders } = useStore();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'msg-welcome',
       sender: 'bot',
-      text: 'Au, olá! 🐾 Sou a Lisa, a cachorrinha consultora de alta perfumaria e beleza da vasconcelos Presente. ✨ Como posso tornar seu dia mais especial?',
+      text: 'Olá, bem-vinda(o) ao Beauty Concierge da VASCONCELOS. Posso auxiliar na escolha de uma fragrância por notas olfativas, consultar cupons ativos ou rastrear seu pedido.',
       timestamp: 'Agora',
       quickActions: [
-        { label: '✨ Qual perfume fixa mais?', actionText: 'Qual perfume fixa mais?' },
-        { label: '🎁 Cupons Ativos', actionText: 'Quais cupons estão ativos?' },
-        { label: '📦 Rastrear Pedido', actionText: 'Quero rastrear meu pedido' },
-        { label: '🚚 Prazo de Frete', actionText: 'Como funciona o frete grátis?' }
+        { label: 'Perfumes de maior fixação', actionText: 'Qual perfume fixa mais?' },
+        { label: 'Cupons disponíveis', actionText: 'Quais cupons estão ativos?' },
+        { label: 'Rastrear meu pedido', actionText: 'Quero rastrear meu pedido' },
+        { label: 'Política de frete grátis', actionText: 'Como funciona o frete grátis?' }
       ]
     }
   ]);
@@ -55,11 +43,9 @@ export const LiveChatWidget: React.FC = () => {
     }
   }, [messages, isChatOpen]);
 
-  // Intelligent intent-based natural response generator
   const generateBotReply = (rawInput: string): { text: string; quickActions?: { label: string; actionText: string }[] } => {
     const text = rawInput.toLowerCase().trim();
 
-    // 1. Saudações (Bom dia, Boa tarde, Boa noite, Olá, Oi, etc.)
     const isMorning = text.includes('bom dia');
     const isAfternoon = text.includes('boa tarde');
     const isEvening = text.includes('boa noite');
@@ -74,154 +60,104 @@ export const LiveChatWidget: React.FC = () => {
       else if (isEvening) saudacao = 'Boa noite!';
 
       return {
-        text: `${saudacao} É um prazer ter você aqui na vasconcelos Presente! Como posso te encantar hoje? Posso te indicar uma fragrância marcante com mais de 14h de fixação, liberar cupons exclusivos ou te ajudar a acompanhar um pedido. 🐾`,
+        text: `${saudacao} Como posso auxiliar sua experiência na VASCONCELOS hoje? Posso indicar uma fragrância por família olfativa, informar os cupons vigentes ou verificar o status de um pedido.`,
         quickActions: [
-          { label: '🌹 Ver Mais Vendidos', actionText: 'Quais os perfumes mais vendidos?' },
-          { label: '🎟️ Cupons de Hoje', actionText: 'Quais cupons estão ativos?' },
-          { label: '🔍 Rastrear Encomenda', actionText: 'Quero rastrear meu pedido' }
+          { label: 'Ver Best-Sellers', actionText: 'Quais os perfumes mais vendidos?' },
+          { label: 'Cupons Ativos', actionText: 'Quais cupons estão ativos?' },
+          { label: 'Rastrear Pedido', actionText: 'Quero rastrear meu pedido' }
         ]
       };
     }
 
-    // 2. Agradecimentos & Elogios
-    if (text.includes('obrigad') || text.includes('valeu') || text.includes('agradeço') || text.includes('muito bom') || text.includes('maravilha') || text.includes('perfeito')) {
+    if (text.includes('obrigad') || text.includes('valeu') || text.includes('agradeço') || text.includes('perfeito')) {
       return {
-        text: 'Por nada! Conte sempre comigo e com a vasconcelos Presente para realçar sua essência e marcar presença por onde passar. Se precisar de mais alguma dica, estou por aqui! ✨🐾',
+        text: 'Disponha! Permanecemos à disposição caso precise de qualquer outra recomendação.',
         quickActions: [
-          { label: '🛍️ Explorar a Loja', actionText: 'Ver todos os produtos' }
+          { label: 'Explorar Catálogo', actionText: 'Ver todos os produtos' }
         ]
       };
     }
 
-    // 3. Rastreamento e Pedidos
-    if (text.includes('rastrear') || text.includes('pedido') || text.includes('onde esta') || text.includes('chegar') || text.includes('meu pacote') || text.includes('status')) {
+    if (text.includes('rastrear') || text.includes('pedido') || text.includes('onde esta') || text.includes('chegar') || text.includes('status')) {
       const lastOrder = orders[0];
       if (lastOrder) {
         return {
-          text: `Localizei seu pedido mais recente (${lastOrder.orderNumber})! Ele está com status "${lastOrder.orderStatus.toUpperCase()}" com código de rastreio: ${lastOrder.trackingCode || 'em processamento'}. Você também pode acompanhar tudo clicando no menu do seu perfil no topo do site.`,
+          text: `Localizamos seu pedido mais recente (${lastOrder.orderNumber}). Status atual: "${lastOrder.orderStatus.toUpperCase()}" — código de rastreio: ${lastOrder.trackingCode || 'em preparação'}.`,
           quickActions: [
-            { label: '📦 Ver Outro Pedido', actionText: 'Quero ver meus pedidos' },
-            { label: '💬 Atendente Humano', actionText: 'Falar com atendente humano' }
+            { label: 'Falar com Atendimento', actionText: 'Falar com atendente humano' }
           ]
         };
       }
       return {
-        text: 'Para consultar sua entrega, você pode acessar a aba "Meus Pedidos" no menu do topo do site ou me informar o número do pedido (ex: VSC-98214) para eu consultar para você!',
+        text: 'Para consultar sua entrega, acesse "Minha Conta > Meus Pedidos" no topo da página ou informe o código do pedido (ex: VSC-98214).',
         quickActions: [
-          { label: '💬 Falar com Suporte Humano', actionText: 'Quero falar com atendente humano' }
+          { label: 'Falar com Especialista', actionText: 'Quero falar com atendente humano' }
         ]
       };
     }
 
-    // 4. Cupons e Descontos
-    if (text.includes('cupom') || text.includes('desconto') || text.includes('promo') || text.includes('promocao') || text.includes('promocional') || text.includes('voucher')) {
+    if (text.includes('cupom') || text.includes('desconto') || text.includes('promo') || text.includes('voucher')) {
       return {
-        text: 'Temos cupons imperdíveis ativos hoje para você aproveitar:\n\n✨ BEMVINDO10 — 10% OFF no seu primeiro pedido\n✨ VASCONCELOS20 — 20% OFF em pedidos acima de R$ 200\n\nAlém disso, pagando no PIX você ganha 5% de desconto extra imediato!',
+        text: 'Benefícios disponíveis hoje na loja:\n\n• BEMVINDO10 — 10% OFF na primeira compra\n• VASCONCELOS20 — 20% OFF em compras acima de R$ 200\n\nPagamentos via PIX contam ainda com 5% de desconto imediato.',
         quickActions: [
-          { label: '🎁 Ver Kits Promocionais', actionText: 'Quais kits estão em promoção?' },
-          { label: '🛍️ Ir para o Catálogo', actionText: 'Ver todos os produtos' }
+          { label: 'Estojos & Presentes', actionText: 'Quais kits estão em promoção?' }
         ]
       };
     }
 
-    // 5. Frete e Prazos
-    if (text.includes('frete') || text.includes('entrega') || text.includes('prazo') || text.includes('envio') || text.includes('transportadora')) {
+    if (text.includes('frete') || text.includes('entrega') || text.includes('prazo') || text.includes('envio')) {
       return {
-        text: 'Oferecemos FRETE GRÁTIS para todo o Brasil em compras a partir de R$ 199! 🚚\n\nNossos pedidos são despachados em até 24h úteis com código de rastreamento no WhatsApp e e-mail. Você também pode simular o prazo exato inserindo seu CEP direto na sacola ou no produto.',
+        text: 'Oferecemos Frete Grátis para todo o Brasil em compras acima de R$ 199. Todos os pedidos são expedidos com código de rastreamento enviado por e-mail e WhatsApp.',
         quickActions: [
-          { label: '🛍️ Escolher Produtos', actionText: 'Ver todos os produtos' },
-          { label: '🎁 Kits com Frete Grátis', actionText: 'Quais kits estão em promoção?' }
+          { label: 'Consultar Cupons', actionText: 'Quais cupons estão ativos?' }
         ]
       };
     }
 
-    // 6. Fixação e Perfumes Específicos
-    if (text.includes('fixa') || text.includes('duracao') || text.includes('fixacao') || text.includes('proje') || text.includes('obsession') || text.includes('perfume')) {
+    if (text.includes('fixa') || text.includes('duracao') || text.includes('fixacao') || text.includes('obsession') || text.includes('perfume')) {
       return {
-        text: 'Nosso grande campeão de fixação é o Obsession Rouge Eau de Parfum! Ele possui fórmula de altíssima concentração com fixação comprovada superior a 14 horas, deixando um rastro sofisticado de pera caramelizada, orquídea negra e baunilha.\n\nPara o dia a dia, nossos Body Splashes (como o Heaven Pink) garantem frescor prolongado e podem ser reaplicados no corpo, roupas e cabelos!',
+        text: 'Nossa maior concentração de perfumaria é o Obsession Rouge Eau de Parfum (100ml), com mais de 14 horas de fixação na pele. Combina notas de topo de pera caramelizada e pimenta rosa, coração de orquídea negra e fundo de baunilha de Madagascar.',
         quickActions: [
-          { label: '🌹 Conhecer Obsession Rouge', actionText: 'Me fale sobre o Obsession Rouge' },
-          { label: '🍓 Ver Body Splashes', actionText: 'Quero ver os body splashes' }
+          { label: 'Conhecer Body Splashes', actionText: 'Quero ver os body splashes' },
+          { label: 'Linha Skincare', actionText: 'Quero ver os produtos de skincare' }
         ]
       };
     }
 
-    // 7. Famílias Olfativas (Doce, Floral, Amadeirado, Cítrico/Fresco)
-    if (text.includes('doce') || text.includes('gourmand') || text.includes('baunilha') || text.includes('caramelo')) {
+    if (text.includes('doce') || text.includes('gourmand') || text.includes('baunilha') || text.includes('splash')) {
       return {
-        text: 'Se você ama fragrâncias doces e marcantes, recomendo o Body Splash Heaven Pink e Sweet Sugar Pop! Eles combinam notas de morango silvestre, marshmallow e baunilha pura — viciantes e muito elogiados por onde você passar.',
+        text: 'Para quem aprecia notas adocicadas e envolventes, indicamos o Body Splash Heaven Pink e o Sweet Sugar Pop, formulados para perfumação generosa ao longo do dia.',
         quickActions: [
-          { label: '💖 Ver Linha Gourmand', actionText: 'Quero ver os body splashes' }
-        ]
-      };
-    }
-    if (text.includes('amadeirado') || text.includes('intenso') || text.includes('forte') || text.includes('noite') || text.includes('elegante')) {
-      return {
-        text: 'Para ocasiões especiais e noites marcantes, o Obsession Rouge e o Golden Noir são escolhas impecáveis. Eles combinam madeiras nobres, âmbar cristal e flores exóticas para uma assinatura de puro poder.',
-        quickActions: [
-          { label: '✨ Ver Perfumes de Luxo', actionText: 'Qual perfume fixa mais?' }
+          { label: 'Perfumes Intensos', actionText: 'Qual perfume fixa mais?' }
         ]
       };
     }
 
-    // 8. Skincare e Cuidados Faciais
-    if (text.includes('pele') || text.includes('skincare') || text.includes('serum') || text.includes('sérum') || text.includes('rugas') || text.includes('mancha') || text.includes('hidrat')) {
+    if (text.includes('pele') || text.includes('skincare') || text.includes('serum') || text.includes('sérum') || text.includes('hidrat')) {
       return {
-        text: 'Nossa linha de Skincare Facial de Alta Performance foi formulada com Ácido Hialurônico Puro, Niacinamida e Vitamina C Estabilizada. Proporciona efeito lifting imediato, hidratação profunda sem oleosidade e luminosidade radiante desde a primeira aplicação!',
+        text: 'Nossa linha de Skincare reúne ativos clínicos como Ácido Hialurônico, Niacinamida e Vitamina C Estabilizada para hidratação profunda e uniformização do tom da pele.',
         quickActions: [
-          { label: '✨ Ver Sérum Glow', actionText: 'Quero ver os produtos de skincare' }
+          { label: 'Consultar Cupons', actionText: 'Quais cupons estão ativos?' }
         ]
       };
     }
 
-    // 9. Maquiagem e Gloss
-    if (text.includes('maquiagem') || text.includes('make') || text.includes('batom') || text.includes('gloss') || text.includes('labio')) {
+    if (text.includes('humano') || text.includes('atendente') || text.includes('sac') || text.includes('whatsapp')) {
       return {
-        text: 'Nossos Lip Glosses com Ácido Hialurônico proporcionam hidratação intensa, brilho espelhado e efeito volumizador instantâneo sem grudar nos lábios. São perfeitos para levar na bolsa e retocar ao longo do dia!',
+        text: 'Encaminhamos sua solicitação para nossa equipe de atendimento. Você também pode falar diretamente pelo WhatsApp Concierge: (11) 99876-5432 ou pelo e-mail sandravasconcellossillva@gmail.com.',
         quickActions: [
-          { label: '💄 Ver Maquiagens', actionText: 'Quero ver maquiagem' }
+          { label: 'Rastrear Pedido', actionText: 'Quero rastrear meu pedido' }
         ]
       };
     }
 
-    // 10. Pagamento e Parcelamento
-    if (text.includes('pagamento') || text.includes('pagar') || text.includes('cartao') || text.includes('cartão') || text.includes('pix') || text.includes('parcel')) {
-      return {
-        text: 'Aceitamos PIX com 5% de desconto imediato e cartões de crédito em até 10x sem juros! Todo o processo de checkout é criptografado com certificado SSL de segurança máxima.',
-        quickActions: [
-          { label: '🛍️ Ir para a Sacola', actionText: 'Quero finalizar meu pedido' }
-        ]
-      };
-    }
-
-    // 11. Trocas, Devoluções e Garantia
-    if (text.includes('troca') || text.includes('devolver') || text.includes('garantia') || text.includes('defeito') || text.includes('original')) {
-      return {
-        text: 'Você tem garantia total de satisfação vasconcelos Presente! Garantimos 100% de autenticidade em todos os frascos. Conforme o Código de Defesa do Consumidor, você tem até 7 dias após o recebimento para solicitar troca ou devolução sem complicações.',
-        quickActions: [
-          { label: '💬 Atendente do SAC', actionText: 'Falar com atendente humano' }
-        ]
-      };
-    }
-
-    // 12. Atendente Humano
-    if (text.includes('humano') || text.includes('atendente') || text.includes('falar com alguem') || text.includes('pessoa') || text.includes('sac') || text.includes('telefone') || text.includes('whatsapp')) {
-      return {
-        text: 'Com certeza! Você foi inserido(a) na fila prioritária do nosso SAC humanizado 24h. Um de nossos especialistas da vasconcelos Presente assumirá esta conversa ou entrará em contato via WhatsApp/e-mail para te atender de forma exclusiva.',
-        quickActions: [
-          { label: '🔍 Rastrear Enquanto Aguardo', actionText: 'Quero rastrear meu pedido' }
-        ]
-      };
-    }
-
-    // 13. Fallback inteligente e prestativo
     return {
-      text: 'Entendi! Estou pronta para te ajudar com qualquer dúvida sobre nossas fragrâncias de luxo, pedidos ou promoções. Sobre qual assunto você gostaria de saber mais?',
+      text: 'Estou à disposição para auxiliar com recomendações olfativas, skincare, prazos de entrega ou códigos promocionais. Como posso ajudar?',
       quickActions: [
-        { label: '✨ Melhores Perfumes', actionText: 'Qual perfume fixa mais?' },
-        { label: '🎟️ Cupons Ativos', actionText: 'Quais cupons estão ativos?' },
-        { label: '📦 Rastrear Encomenda', actionText: 'Quero rastrear meu pedido' },
-        { label: '💬 Atendente Humano', actionText: 'Falar com atendente humano' }
+        { label: 'Perfumes de maior fixação', actionText: 'Qual perfume fixa mais?' },
+        { label: 'Cupons disponíveis', actionText: 'Quais cupons estão ativos?' },
+        { label: 'Rastrear pedido', actionText: 'Quero rastrear meu pedido' },
+        { label: 'Falar com Atendimento', actionText: 'Falar com atendente humano' }
       ]
     };
   };
@@ -255,142 +191,85 @@ export const LiveChatWidget: React.FC = () => {
         }
       ]);
       setIsTyping(false);
-    }, 600);
+    }, 500);
   };
 
   return (
     <>
-      {/* Floating launcher badge */}
+      {/* Discrete Prestige Concierge Launcher */}
       {!isChatOpen && (
-        <motion.button
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+        <button
           onClick={() => setIsChatOpen(true)}
-          className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 bg-gradient-to-r from-neutral-900 via-stone-900 to-black hover:from-rose-600 hover:to-rose-700 text-white p-3.5 sm:px-5 sm:py-3.5 rounded-full shadow-2xl shadow-neutral-900/40 flex items-center gap-3 transition-colors duration-300 group border border-amber-400/40 cursor-pointer"
-          aria-label="Abrir Lisa, consultora virtual"
+          className="fixed bottom-5 right-5 z-40 bg-[#111111] hover:bg-[#8B1E3F] text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2.5 transition-colors duration-200 border border-white/10 cursor-pointer"
+          aria-label="Abrir Beauty Concierge"
         >
-          <div className="relative">
-            <LisaAvatar size={40} breathe tiltOnHover />
-            <span className="w-3 h-3 bg-emerald-400 border-2 border-neutral-900 rounded-full absolute -top-1 -right-1 animate-pulse" />
-          </div>
-          <div className="hidden sm:block text-left">
-            <span className="block text-[10px] font-black uppercase tracking-wider text-amber-300">
-              Lisa • Consultora 24h
-            </span>
-            <span className="block text-xs font-bold text-white">
-              Tirar Dúvidas & Dicas
-            </span>
-          </div>
-          <PawBubble />
-        </motion.button>
+          <MessageSquare className="w-4 h-4" />
+          <span className="text-xs font-bold uppercase tracking-[0.12em]">
+            Concierge
+          </span>
+        </button>
       )}
 
       {/* Chat Window */}
       <AnimatePresence>
         {isChatOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-4 sm:bottom-6 right-3 sm:right-6 z-50 w-[94vw] sm:w-[400px] h-[550px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-neutral-200/80 flex flex-col overflow-hidden"
+            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ duration: 0.2 }}
+            className="fixed bottom-4 sm:bottom-6 right-3 sm:right-6 z-50 w-[94vw] sm:w-[380px] h-[520px] max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-neutral-200 flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="relative p-4 bg-gradient-to-r from-neutral-900 via-stone-900 to-black text-white flex items-center justify-between border-b border-amber-500/20">
-              <FloatingHearts />
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <LisaAvatar size={40} breathe />
-                  <span className="w-3 h-3 bg-emerald-400 border-2 border-neutral-900 rounded-full absolute bottom-0 right-0" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold flex items-center gap-1.5 text-white">
-                    Lisa • Consultora vasconcelos
-                    <ShieldCheck className="w-4 h-4 text-amber-400" />
-                  </h3>
-                  <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    Online em tempo real
-                  </span>
-                </div>
+            <div className="p-4 bg-[#111111] text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-[0.16em] flex items-center gap-1.5 text-white">
+                  VASCONCELOS • Concierge
+                  <ShieldCheck className="w-3.5 h-3.5 text-neutral-400" />
+                </h3>
+                <span className="text-[11px] text-neutral-400 flex items-center gap-1 mt-0.5">
+                  <Clock className="w-3 h-3 text-emerald-400" />
+                  Consultoria Olfativa & Pedidos
+                </span>
               </div>
 
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
+              <button
                 onClick={() => setIsChatOpen(false)}
-                className="p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
                 aria-label="Fechar chat"
               >
-                <X className="w-5 h-5" />
-              </motion.button>
-            </div>
-
-            {/* Quick FAQ Chips */}
-            <div className="p-2.5 bg-[#FAF8F5] border-b border-neutral-200/60 flex gap-1.5 overflow-x-auto scrollbar-none">
-              <button
-                onClick={() => handleSend('Qual perfume fixa mais?')}
-                className="px-3 py-1 bg-white border border-neutral-200 text-neutral-700 rounded-full text-[11px] font-semibold whitespace-nowrap hover:border-amber-400 hover:text-amber-800 transition shrink-0 cursor-pointer shadow-2xs"
-              >
-                ✨ Perfume que mais fixa
-              </button>
-              <button
-                onClick={() => handleSend('Quais cupons estão ativos hoje?')}
-                className="px-3 py-1 bg-white border border-neutral-200 text-neutral-700 rounded-full text-[11px] font-semibold whitespace-nowrap hover:border-amber-400 hover:text-amber-800 transition shrink-0 cursor-pointer shadow-2xs"
-              >
-                🎟️ Cupons Ativos
-              </button>
-              <button
-                onClick={() => handleSend('Quero rastrear meu pedido')}
-                className="px-3 py-1 bg-white border border-neutral-200 text-neutral-700 rounded-full text-[11px] font-semibold whitespace-nowrap hover:border-amber-400 hover:text-amber-800 transition shrink-0 cursor-pointer shadow-2xs"
-              >
-                📦 Rastrear Pedido
-              </button>
-              <button
-                onClick={() => handleSend('Quero falar com um atendente humano')}
-                className="px-3 py-1 bg-white border border-neutral-200 text-neutral-700 rounded-full text-[11px] font-semibold whitespace-nowrap hover:border-amber-400 hover:text-amber-800 transition shrink-0 cursor-pointer shadow-2xs"
-              >
-                💬 Falar com Atendente
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Messages Container */}
-            <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-[#FAF9F6] text-xs">
+            <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-[#F7F6F2] text-xs">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  {msg.sender === 'bot' && (
-                    <LisaAvatar size={28} hopOnMount />
-                  )}
-
                   <div className="max-w-[85%] space-y-2">
                     <div
-                      className={`p-3.5 rounded-2xl leading-relaxed shadow-xs ${
+                      className={`p-3.5 rounded-xl leading-relaxed ${
                         msg.sender === 'user'
-                          ? 'bg-neutral-900 text-white rounded-br-none font-medium'
-                          : 'bg-white text-neutral-800 border border-neutral-200/80 rounded-bl-none font-normal'
+                          ? 'bg-[#111111] text-white rounded-br-none font-medium'
+                          : 'bg-white text-neutral-800 border border-neutral-200 rounded-bl-none'
                       }`}
                     >
                       <p className="whitespace-pre-line">{msg.text}</p>
-                      <span className={`block text-[9px] mt-1.5 text-right ${
-                        msg.sender === 'user' ? 'text-neutral-400' : 'text-neutral-400'
-                      }`}>
+                      <span className="block text-[9px] mt-1.5 text-right text-neutral-400">
                         {msg.timestamp}
                       </span>
                     </div>
 
-                    {/* Quick suggestion action buttons attached to bot reply */}
                     {msg.quickActions && msg.quickActions.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 pt-0.5">
                         {msg.quickActions.map((qa, i) => (
                           <button
                             key={i}
                             onClick={() => handleSend(qa.actionText)}
-                            className="text-[10px] bg-white hover:bg-amber-50 text-neutral-700 hover:text-amber-800 border border-neutral-200 hover:border-amber-400 px-2.5 py-1 rounded-full transition font-semibold cursor-pointer shadow-2xs"
+                            className="text-[10px] bg-white hover:bg-neutral-900 text-neutral-800 hover:text-white border border-neutral-300 px-2.5 py-1 rounded-md transition font-semibold cursor-pointer"
                           >
                             {qa.label}
                           </button>
@@ -402,12 +281,8 @@ export const LiveChatWidget: React.FC = () => {
               ))}
 
               {isTyping && (
-                <div className="flex items-center gap-2 text-neutral-500 text-xs italic">
-                  <LisaAvatar size={28} mood="listening" />
-                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-bounce" />
-                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-bounce delay-100" />
-                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-bounce delay-200" />
-                  <span>Lisa está digitando...</span>
+                <div className="text-neutral-500 text-[11px] italic">
+                  Consultora digitando...
                 </div>
               )}
 
@@ -424,21 +299,19 @@ export const LiveChatWidget: React.FC = () => {
             >
               <input
                 type="text"
-                placeholder="Ex: Bom dia, qual perfume fixa mais?"
+                placeholder="Digite sua dúvida..."
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                className="flex-1 bg-[#FAF8F5] border border-neutral-300/80 rounded-full px-4 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-amber-500 focus:bg-white transition"
+                className="flex-1 bg-[#F7F6F2] border border-neutral-300 rounded-lg px-3.5 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
               />
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
+              <button
                 type="submit"
                 disabled={!inputText.trim()}
-                className="p-2.5 rounded-full bg-neutral-900 hover:bg-rose-600 text-white transition disabled:opacity-40 cursor-pointer shadow-xs"
+                className="p-2.5 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white transition disabled:opacity-40 cursor-pointer"
                 aria-label="Enviar mensagem"
               >
                 <Send className="w-4 h-4" />
-              </motion.button>
+              </button>
             </form>
 
           </motion.div>

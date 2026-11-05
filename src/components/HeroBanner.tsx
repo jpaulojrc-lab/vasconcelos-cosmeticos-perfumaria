@@ -1,249 +1,180 @@
-import React, { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, Clock, Shield, Award, Heart, Flame } from 'lucide-react';
-import { motion } from 'motion/react';
+import React from 'react';
+import { ArrowRight, ShoppingBag, Truck, CreditCard, ShieldCheck, Gift } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { formatBRL } from '../utils/formatters';
 
 export const HeroBanner: React.FC = () => {
-  const { setSelectedCategory, setViewMode } = useStore();
+  const { setSelectedCategory, products, addToCart, setSelectedProduct, setIsProductModalOpen } = useStore();
 
-  // Live countdown timer state (2 hours 45 min reset cycle)
-  const [timeLeft, setTimeLeft] = useState({
-    hours: 2,
-    minutes: 48,
-    seconds: 15
-  });
+  const heroProduct = products.find(p => p.id === 'prod-1') || products[0];
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev.seconds > 0) {
-          return { ...prev, seconds: prev.seconds - 1 };
-        } else if (prev.minutes > 0) {
-          return { ...prev, minutes: 59, seconds: 59 };
-        } else if (prev.hours > 0) {
-          return { hours: prev.hours - 1, minutes: 59, seconds: 59 };
-        }
-        return { hours: 3, minutes: 0, seconds: 0 };
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
-
-  const scrollToCatalog = (cat = 'todos') => {
-    setSelectedCategory(cat);
-    setViewMode('store');
-    const catalogEl = document.getElementById('catalogo-produtos');
-    if (catalogEl) {
-      catalogEl.scrollIntoView({ behavior: 'smooth' });
-    }
+  const handleOpenHeroProduct = () => {
+    if (!heroProduct) return;
+    setSelectedProduct(heroProduct);
+    setIsProductModalOpen(true);
   };
 
   return (
-    <div className="relative overflow-hidden bg-velvet-dark text-white border-b border-white/5">
-      {/* Decorative Luxury Ambient Glow Orbs */}
-      <div className="absolute -top-32 -left-24 w-[34rem] h-[34rem] bg-gradient-to-br from-amber-500/20 via-rose-600/20 to-transparent rounded-full blur-[110px] pointer-events-none animate-ambient-glow" />
-      <div className="absolute -bottom-24 -right-24 w-[32rem] h-[32rem] bg-gradient-to-tl from-pink-600/20 via-amber-400/15 to-transparent rounded-full blur-[120px] pointer-events-none animate-ambient-glow [animation-delay:4s]" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(ellipse_at_top,_rgba(223,186,115,0.08),_transparent_70%)] pointer-events-none" />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 md:py-24 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+    <section className="bg-white border-b border-neutral-200">
+      {/* Main Campaign Split Banner */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 rounded-2xl overflow-hidden border border-neutral-200 bg-[#141312] text-white shadow-sm">
           
-          {/* Left Column: Headlines & Call to Actions */}
-          <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-            
-            {/* Live Promo Tag with Urgency */}
-            <motion.div
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full glass-luxury-dark border border-amber-400/35 text-amber-200 text-xs font-semibold tracking-widest uppercase shadow-md shimmer-badge"
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block" />
-              <span className="flex items-center gap-1.5">
-                <Flame className="w-3.5 h-3.5 text-amber-400" />
-                ALTA PERFUMARIA • ATÉ 50% OFF HOJE
-              </span>
-            </motion.div>
-
-            {/* Main Headline */}
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.08] text-white font-display"
-            >
-              A ESSÊNCIA DO <br />
-              <span className="italic font-serif-luxury font-normal text-rose-gold-gradient drop-shadow-md">
-                Poder & Sedução.
-              </span>
-            </motion.h1>
-
-            {/* Description */}
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-sm sm:text-base text-neutral-300/90 max-w-xl mx-auto lg:mx-0 leading-relaxed font-light"
-            >
-              Mergulhe no universo exclusivo da <strong>vasconcelos Presente</strong>. Fragrâncias com fixação superior a 14 horas, acordes nobres europeus e alta concentração de essência pura para marcar presença.
-            </motion.p>
-
-            {/* Countdown Urgency Box */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3 }}
-              className="glass-luxury-dark border border-white/10 p-4 sm:p-5 rounded-2xl max-w-md mx-auto lg:mx-0 shadow-xl"
-            >
-              <div className="flex items-center justify-between text-xs text-neutral-300 mb-2.5 font-medium">
-                <span className="flex items-center gap-1.5 text-amber-300 font-semibold">
-                  <Clock className="w-4 h-4 text-amber-400" />
-                  Ofertas Relâmpago Expiram em:
+          {/* Left Editorial Column */}
+          <div className="lg:col-span-7 p-7 sm:p-12 lg:p-14 flex flex-col justify-between space-y-8">
+            <div className="space-y-5">
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] uppercase tracking-[0.22em] font-bold px-2.5 py-1 bg-white/10 text-neutral-200 border border-white/15">
+                  Eau de Parfum • 100ml
                 </span>
-                <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded-full font-mono font-semibold tracking-wider">
-                  ÚLTIMOS FRASCOS
+                <span className="text-[11px] uppercase tracking-[0.18em] text-[#D4AF37] font-semibold">
+                  Edição Assinatura
                 </span>
               </div>
-              
-              <div className="flex items-center gap-2 justify-center lg:justify-start">
-                <div className="bg-black/70 rounded-xl px-3.5 py-2 text-center min-w-[56px] border border-amber-500/20 shadow-inner">
-                  <span className="text-2xl font-bold font-mono text-white tracking-wider">
-                    {String(timeLeft.hours).padStart(2, '0')}
-                  </span>
-                  <span className="block text-[9px] uppercase tracking-widest text-neutral-400 font-medium mt-0.5">Horas</span>
-                </div>
-                <span className="text-xl font-bold text-amber-400/80">:</span>
-                <div className="bg-black/70 rounded-xl px-3.5 py-2 text-center min-w-[56px] border border-amber-500/20 shadow-inner">
-                  <span className="text-2xl font-bold font-mono text-white tracking-wider">
-                    {String(timeLeft.minutes).padStart(2, '0')}
-                  </span>
-                  <span className="block text-[9px] uppercase tracking-widest text-neutral-400 font-medium mt-0.5">Minutos</span>
-                </div>
-                <span className="text-xl font-bold text-amber-400/80">:</span>
-                <div className="bg-black/70 rounded-xl px-3.5 py-2 text-center min-w-[56px] border border-amber-500/20 shadow-inner">
-                  <span className="text-2xl font-bold font-mono text-amber-300 tracking-wider">
-                    {String(timeLeft.seconds).padStart(2, '0')}
-                  </span>
-                  <span className="block text-[9px] uppercase tracking-widest text-amber-300/70 font-medium mt-0.5">Segundos</span>
-                </div>
-              </div>
-            </motion.div>
 
-            {/* CTA Buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.4 }}
-              className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2"
-            >
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => scrollToCatalog('combos')}
-                className="w-full sm:w-auto px-8 py-3.5 rounded-full bg-gradient-to-r from-pink-600 via-rose-600 to-rose-700 hover:from-pink-500 hover:to-rose-600 text-white font-bold text-sm tracking-wide shadow-lg shadow-pink-600/30 hover:shadow-pink-600/50 transition duration-300 flex items-center justify-center gap-2.5 group cursor-pointer"
-              >
-                <span>APROVEITAR KITS EM PROMOÇÃO</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </motion.button>
-              
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => scrollToCatalog('perfumaria')}
-                className="w-full sm:w-auto px-7 py-3.5 rounded-full glass-luxury-dark hover:bg-white/15 border border-amber-400/25 text-white font-medium text-sm tracking-wide transition duration-300 flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>Explorar Fragrâncias</span>
-              </motion.button>
-            </motion.div>
+              <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1]">
+                Obsession Rouge:{' '}
+                <span className="font-serif-luxury italic font-normal text-[#E8D3B9]">
+                  intensidade que permanece na pele.
+                </span>
+              </h1>
 
-            {/* Social Proof Mini */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 0.5 }}
-              className="pt-2 flex items-center justify-center lg:justify-start gap-3 text-xs text-neutral-300"
-            >
-              <div className="flex -space-x-2">
-                <img className="w-7 h-7 rounded-full border-2 border-neutral-900 object-cover" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80" alt="Cliente vasconcelos" />
-                <img className="w-7 h-7 rounded-full border-2 border-neutral-900 object-cover" src="https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=80&q=80" alt="Cliente vasconcelos" />
-                <img className="w-7 h-7 rounded-full border-2 border-neutral-900 object-cover" src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=80&q=80" alt="Cliente vasconcelos" />
-              </div>
-              <p>
-                <strong className="text-white font-semibold">+45.000 clientes encantadas</strong> com a fixação vasconcelos.
+              <p className="text-sm sm:text-base text-neutral-300 max-w-xl leading-relaxed font-normal">
+                Formulado com óleos essenciais importados de alta concentração para entregar mais de 14 horas de fixação real. Um acorde oriental floral criado para momentos inesquecíveis.
               </p>
-            </motion.div>
-          </div>
 
-          {/* Right Column: Visual Product Showcase Card */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7, delay: 0.2 }}
-            className="lg:col-span-5 relative"
-          >
-            <motion.div
-              animate={{ y: [-4, 4, -4] }}
-              transition={{ repeat: Infinity, duration: 6, ease: "easeInOut" }}
-              className="relative mx-auto max-w-sm rounded-3xl overflow-hidden border border-amber-400/20 shadow-2xl bg-neutral-900/70 backdrop-blur-md p-4 group"
-            >
-              <div className="relative rounded-2xl overflow-hidden aspect-4/5">
-                <img
-                  src="https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=900&q=80"
-                  alt="Obsession Rouge vasconcelos Presente"
-                  className="w-full h-full object-cover group-hover:scale-105 transition duration-700 ease-out"
-                />
-                
-                {/* Floating Tag */}
-                <div className="absolute top-3 left-3 bg-pink-600 text-white text-xs font-black px-3 py-1 rounded-full shadow-lg flex items-center gap-1 shimmer-badge">
-                  <Sparkles className="w-3 h-3 text-amber-200" />
-                  DESTAQUE DA SEMANA • -34% OFF
+              {/* Olfactory Notes Strip — Clean Studio Layout */}
+              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-white/10 max-w-lg">
+                <div>
+                  <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Nota de Topo</span>
+                  <span className="text-xs font-semibold text-white">Pera & Pimenta Rosa</span>
                 </div>
-
-                {/* Floating Bottom Glass Card */}
-                <div className="absolute bottom-3 left-3 right-3 glass-luxury-dark p-3.5 rounded-xl border border-white/15 text-white">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[11px] uppercase tracking-widest text-amber-300 font-bold">Alta Fixação • 100ml</p>
-                      <h4 className="text-sm font-bold text-white">Obsession Rouge Eau de Parfum</h4>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs line-through text-neutral-400">R$ 289,90</p>
-                      <p className="text-base font-black text-rose-300">R$ 189,90</p>
-                    </div>
-                  </div>
+                <div className="border-l border-white/10 pl-3">
+                  <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Coração</span>
+                  <span className="text-xs font-semibold text-white">Orquídea Negra</span>
+                </div>
+                <div className="border-l border-white/10 pl-3">
+                  <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Fundo</span>
+                  <span className="text-xs font-semibold text-white">Baunilha & Âmbar</span>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+
+            {/* Pricing & Commercial CTAs */}
+            <div className="pt-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+              {heroProduct && (
+                <div>
+                  <div className="flex items-baseline gap-2.5">
+                    <span className="text-2xl sm:text-3xl font-extrabold text-white">
+                      {formatBRL(heroProduct.price)}
+                    </span>
+                    {heroProduct.originalPrice > heroProduct.price && (
+                      <span className="text-xs text-neutral-500 line-through">
+                        {formatBRL(heroProduct.originalPrice)}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-neutral-400 block mt-0.5">
+                    Em até 10x de {formatBRL(heroProduct.price / 10)} sem juros ou 5% OFF no PIX
+                  </span>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3">
+                {heroProduct && (
+                  <button
+                    onClick={() => addToCart(heroProduct, 1)}
+                    className="px-6 py-3.5 bg-white hover:bg-[#F3EFEA] text-neutral-950 font-bold text-xs uppercase tracking-[0.12em] rounded-lg flex items-center gap-2.5 transition cursor-pointer"
+                  >
+                    <ShoppingBag className="w-4 h-4" />
+                    <span>Adicionar à Sacola</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    setSelectedCategory('perfumaria');
+                    const el = document.getElementById('catalogo-produtos');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="px-5 py-3.5 border border-white/25 hover:border-white text-white font-semibold text-xs uppercase tracking-[0.12em] rounded-lg flex items-center gap-2 transition cursor-pointer"
+                >
+                  <span>Ver Perfumaria</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Product Editorial Image */}
+          <div 
+            onClick={handleOpenHeroProduct}
+            className="lg:col-span-5 relative min-h-[320px] sm:min-h-[420px] bg-[#1E1C1A] overflow-hidden cursor-pointer group"
+          >
+            {heroProduct && (
+              <>
+                <img
+                  src={heroProduct.images[0]}
+                  alt={heroProduct.name}
+                  className="w-full h-full object-cover object-center group-hover:scale-103 transition-transform duration-700"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                
+                {/* Minimal Editorial Caption */}
+                <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between text-white">
+                  <div>
+                    <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-300 block">
+                      Best-Seller Nº 1
+                    </span>
+                    <p className="text-sm font-bold">{heroProduct.name}</p>
+                  </div>
+                  <span className="text-[11px] font-semibold underline underline-offset-4 text-neutral-200 group-hover:text-white">
+                    Ver Pirâmide Olfativa
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
 
         </div>
       </div>
 
-      {/* Trust Badges Strip with Subtle Glow */}
-      <div className="border-t border-white/10 bg-black/50 backdrop-blur-md py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-2.5 text-xs text-neutral-300 hover:text-white transition">
-              <Shield className="w-4 h-4 text-amber-400 shrink-0" />
-              <span><strong>100% Original</strong> & Cruelty Free</span>
+      {/* Commercial Service Strip — Sephora / Beleza na Web Reference */}
+      <div className="border-t border-neutral-100 bg-[#F7F6F2]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <div className="flex items-center gap-3">
+            <Truck className="w-4 h-4 text-neutral-800 shrink-0" />
+            <div>
+              <p className="font-bold text-neutral-900">Frete Grátis Brasil</p>
+              <p className="text-[11px] text-neutral-500">Em compras acima de R$ 199</p>
             </div>
-            <div className="flex items-center justify-center md:justify-start gap-2.5 text-xs text-neutral-300 hover:text-white transition">
-              <Award className="w-4 h-4 text-amber-400 shrink-0" />
-              <span><strong>Fixação 14 Horas</strong> Certificada</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <CreditCard className="w-4 h-4 text-neutral-800 shrink-0" />
+            <div>
+              <p className="font-bold text-neutral-900">Até 10x Sem Juros</p>
+              <p className="text-[11px] text-neutral-500">Ou 5% de desconto imediato no PIX</p>
             </div>
-            <div className="flex items-center justify-center md:justify-start gap-2.5 text-xs text-neutral-300 hover:text-white transition">
-              <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-              <span><strong>Envio Rápido</strong> com Rastreio</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Gift className="w-4 h-4 text-neutral-800 shrink-0" />
+            <div>
+              <p className="font-bold text-neutral-900">Mimo Exclusivo na Sacola</p>
+              <p className="text-[11px] text-neutral-500">Amostra de luxo em pedidos elegíveis</p>
             </div>
-            <div className="flex items-center justify-center md:justify-start gap-2.5 text-xs text-neutral-300 hover:text-white transition">
-              <Heart className="w-4 h-4 text-rose-400 shrink-0" />
-              <span><strong>Garantia de Satisfação</strong> vasconcelos</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <ShieldCheck className="w-4 h-4 text-neutral-800 shrink-0" />
+            <div>
+              <p className="font-bold text-neutral-900">Procedência Garantida</p>
+              <p className="text-[11px] text-neutral-500">Fórmulas dermatologicamente testadas</p>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 };

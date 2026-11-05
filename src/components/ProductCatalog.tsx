@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { SlidersHorizontal, Sparkles } from 'lucide-react';
-import { motion } from 'motion/react';
+import { SlidersHorizontal, Search } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
 
@@ -8,13 +7,9 @@ export const ProductCatalog: React.FC = () => {
   const { products, selectedCategory, setSelectedCategory, searchQuery, setSearchQuery } = useStore();
   const [sortBy, setSortBy] = useState<'relevance' | 'price-asc' | 'price-desc' | 'rating'>('relevance');
 
-  // Filter and sort products
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
-      // Category filter
       const matchesCategory = selectedCategory === 'todos' || p.category === selectedCategory;
-      
-      // Search filter
       const matchesSearch = searchQuery.trim() === '' || 
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.subtitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -35,16 +30,16 @@ export const ProductCatalog: React.FC = () => {
     { id: 'bodysplash', label: 'Body Splash' },
     { id: 'skincare', label: 'Skincare' },
     { id: 'maquiagem', label: 'Maquiagem' },
-    { id: 'combos', label: 'Kits & Combos' }
+    { id: 'combos', label: 'Estojos & Kits' }
   ];
 
   return (
     <section id="catalogo-produtos" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       
       {/* Category Tabs & Filter Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-neutral-200/80 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-neutral-200 gap-4">
         
-        {/* Pills with subtle luxury borders */}
+        {/* Clean Commercial Filter Buttons */}
         <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
           {categories.map((c) => {
             const isActive = selectedCategory === c.id;
@@ -52,15 +47,12 @@ export const ProductCatalog: React.FC = () => {
               <button
                 key={c.id}
                 onClick={() => setSelectedCategory(c.id)}
-                className={`relative px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 cursor-pointer ${
+                className={`px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                   isActive
-                    ? 'bg-neutral-900 text-white shadow-md shadow-neutral-900/15 border border-amber-400/30'
-                    : 'bg-white text-neutral-600 hover:text-neutral-900 hover:border-amber-300/80 border border-neutral-200/80 hover:bg-[#FBF9F5]'
+                    ? 'bg-[#111111] text-white'
+                    : 'bg-white text-neutral-600 hover:text-neutral-950 border border-neutral-200 hover:border-neutral-400'
                 }`}
               >
-                {isActive && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-neutral-900" />
-                )}
                 {c.label}
               </button>
             );
@@ -69,18 +61,18 @@ export const ProductCatalog: React.FC = () => {
 
         {/* Sort & Count */}
         <div className="flex items-center justify-between md:justify-end gap-3 text-xs text-neutral-500">
-          <span className="font-medium">
-            <strong className="text-neutral-800 font-bold">{filteredProducts.length}</strong> produtos selecionados
+          <span>
+            <strong className="text-neutral-900 font-bold">{filteredProducts.length}</strong> itens
           </span>
 
-          <div className="flex items-center gap-2 bg-white border border-neutral-200/90 rounded-full px-3.5 py-1.5 shadow-xs">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-amber-600" />
+          <div className="flex items-center gap-2 bg-white border border-neutral-200 rounded-lg px-3 py-2">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-neutral-600" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-transparent text-neutral-800 text-xs font-semibold focus:outline-hidden cursor-pointer"
+              className="bg-transparent text-neutral-900 text-xs font-semibold focus:outline-hidden cursor-pointer"
             >
-              <option value="relevance">Mais Populares</option>
+              <option value="relevance">Mais Relevantes</option>
               <option value="price-asc">Menor Preço</option>
               <option value="price-desc">Maior Preço</option>
               <option value="rating">Melhor Avaliados</option>
@@ -91,39 +83,35 @@ export const ProductCatalog: React.FC = () => {
 
       {/* Active Search Badge */}
       {searchQuery && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 flex items-center justify-between bg-rose-50 border border-rose-200 px-4 py-2.5 rounded-2xl text-xs"
-        >
-          <span className="text-rose-900">
-            Resultados da busca por: <strong>"{searchQuery}"</strong>
+        <div className="mt-4 flex items-center justify-between bg-white border border-neutral-200 px-4 py-2.5 rounded-lg text-xs">
+          <span className="text-neutral-700">
+            Resultados para: <strong className="text-neutral-950">"{searchQuery}"</strong>
           </span>
           <button
             onClick={() => setSearchQuery('')}
-            className="text-rose-600 font-bold hover:underline cursor-pointer"
+            className="text-[#8B1E3F] font-bold hover:underline cursor-pointer"
           >
-            Limpar busca
+            Limpar filtro
           </button>
-        </motion.div>
+        </div>
       )}
 
       {/* Grid of Products */}
       {filteredProducts.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-neutral-300 mt-6 p-8">
-          <Sparkles className="w-10 h-10 text-rose-400 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-neutral-900 font-display">Nenhum produto encontrado</h3>
-          <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto font-light">
-            Tente buscar por termos mais genéricos como "perfume", "creme" ou "splash".
+        <div className="text-center py-16 bg-white rounded-xl border border-neutral-200 mt-6 p-8">
+          <Search className="w-8 h-8 text-neutral-400 mx-auto mb-3" />
+          <h3 className="text-base font-bold text-neutral-900">Nenhum produto encontrado</h3>
+          <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
+            Tente buscar por termos como "perfume", "sérum" ou "body splash".
           </p>
           <button
             onClick={() => {
               setSelectedCategory('todos');
               setSearchQuery('');
             }}
-            className="mt-5 px-6 py-2.5 rounded-full bg-neutral-900 hover:bg-rose-600 text-white text-xs font-bold transition duration-300 cursor-pointer"
+            className="mt-5 px-6 py-2.5 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-bold transition-colors cursor-pointer"
           >
-            Ver catálogo completo
+            Mostrar todo o catálogo
           </button>
         </div>
       ) : (

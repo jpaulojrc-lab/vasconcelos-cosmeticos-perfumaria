@@ -1,0 +1,12 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="512" height="512">
+  <circle cx="100" cy="100" r="88" fill="#F5F4F0" stroke="#6B6E68" stroke-width="7.5"/>
+  <path d="M 56,52 L 105,52 L 125,72 L 125,142 L 56,142 Z" fill="#F5F4F0" stroke="#6B6E68" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 105,54 L 105,72 L 123,72" fill="none" stroke="#6A8464" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="68" y1="78" x2="94" y2="78" stroke="#6B6E68" stroke-width="4.8" stroke-linecap="round"/>
+  <line x1="68" y1="92" x2="94" y2="92" stroke="#6B6E68" stroke-width="4.8" stroke-linecap="round"/>
+  <line x1="68" y1="106" x2="86" y2="106" stroke="#6B6E68" stroke-width="4.8" stroke-linecap="round"/>
+  <line x1="68" y1="120" x2="84" y2="120" stroke="#6B6E68" stroke-width="4.8" stroke-linecap="round"/>
+  <circle cx="113" cy="108" r="23" fill="#F5F4F0"/>
+  <line x1="126" y1="121" x2="143" y2="138" stroke="#6A8464" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="113" cy="108" r="17.5" fill="#F5F4F0" stroke="#6A8464" stroke-width="5.8"/>
+</svg>

@@ -21,7 +21,7 @@ const MainContent: React.FC = () => {
   const { viewMode } = useStore();
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FAF8F5]">
+    <div className="min-h-screen flex flex-col bg-[#F7F6F2]">
       {/* Global Header */}
       <Header />
 

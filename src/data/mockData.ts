@@ -516,6 +516,93 @@ export const INITIAL_ORDERS: Order[] = [
     paymentStatus: 'paid',
     orderStatus: 'entregue',
     trackingCode: 'QB123456789BR'
+  },
+  {
+    id: 'ord-1004',
+    orderNumber: 'VSC-98217',
+    createdAt: '2026-10-22T11:20:00Z',
+    customer: {
+      name: 'Patrícia Albuquerque',
+      email: 'patricia.albuquerque@gmail.com',
+      phone: '(11) 99412-8877',
+      cpf: '654.321.987-10'
+    },
+    shippingAddress: {
+      id: 'addr-4',
+      name: 'Residência',
+      cep: '04538-132',
+      logradouro: 'Avenida Brigadeiro Faria Lima',
+      numero: '3477',
+      bairro: 'Itaim Bibi',
+      localidade: 'São Paulo',
+      uf: 'SP'
+    },
+    shippingMethod: {
+      name: 'Vasconcelos Express',
+      price: 0,
+      days: 1
+    },
+    items: [
+      {
+        productId: 'prod-4',
+        name: 'Kit Triplo Deusa Dourada (Perfume + Splash + Creme)',
+        price: 249.90,
+        quantity: 2,
+        image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=400&q=80'
+      }
+    ],
+    subtotal: 499.80,
+    discount: 0,
+    shippingCost: 0,
+    total: 499.80,
+    paymentMethod: 'credit_card',
+    paymentStatus: 'paid',
+    orderStatus: 'entregue',
+    installments: 10,
+    trackingCode: 'VSC4410BR'
+  },
+  {
+    id: 'ord-1005',
+    orderNumber: 'VSC-98218',
+    createdAt: '2026-10-25T16:05:00Z',
+    customer: {
+      name: 'Renata Figueiredo',
+      email: 'renata.fig@hotmail.com',
+      phone: '(41) 98811-2233',
+      cpf: '112.233.445-66'
+    },
+    shippingAddress: {
+      id: 'addr-5',
+      name: 'Casa',
+      cep: '80420-090',
+      logradouro: 'Rua Vicente Machado',
+      numero: '850',
+      bairro: 'Batel',
+      localidade: 'Curitiba',
+      uf: 'PR'
+    },
+    shippingMethod: {
+      name: 'Correios SEDEX',
+      price: 24.90,
+      days: 2
+    },
+    items: [
+      {
+        productId: 'prod-1',
+        name: 'Obsession Rouge Eau de Parfum',
+        price: 189.90,
+        quantity: 1,
+        image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=400&q=80'
+      }
+    ],
+    subtotal: 189.90,
+    discount: 0,
+    shippingCost: 24.90,
+    total: 214.80,
+    paymentMethod: 'boleto',
+    paymentStatus: 'pending',
+    orderStatus: 'pendente',
+    trackingCode: 'VSC9902BR'
   }
 ];
 

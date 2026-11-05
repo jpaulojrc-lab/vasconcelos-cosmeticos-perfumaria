@@ -1,6 +1,5 @@
 import React from 'react';
-import { Flame, Sparkles, ShoppingBag, Eye, Zap } from 'lucide-react';
-import { motion } from 'motion/react';
+import { ShoppingBag, Star } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../types';
 import { formatBRL, formatInstallment } from '../utils/formatters';
@@ -8,148 +7,114 @@ import { formatBRL, formatInstallment } from '../utils/formatters';
 export const FlashOffers: React.FC = () => {
   const { products, addToCart, setSelectedProduct, setIsProductModalOpen } = useStore();
 
-  const flashProducts = products.filter(p => p.isFlashSale);
+  const featuredOffers = products.filter(p => p.isFlashSale);
 
   const handleOpenDetail = (product: Product) => {
     setSelectedProduct(product);
     setIsProductModalOpen(true);
   };
 
-  if (flashProducts.length === 0) return null;
+  if (featuredOffers.length === 0) return null;
 
   return (
-    <section className="bg-gradient-to-b from-[#F7F3EE] via-[#FAF8F5] to-white py-12 border-y border-amber-200/40 relative overflow-hidden">
-      {/* Subtle luxury glow effect in background */}
-      <div className="absolute top-0 right-10 w-72 h-72 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+    <section className="bg-white py-12 border-y border-neutral-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Section Header */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+        {/* Section Header — Prestige Retail Style */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4 pb-4 border-b border-neutral-100">
           <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-600/10 text-rose-700 border border-rose-500/20 text-xs font-black uppercase tracking-wider mb-2.5 shimmer-badge">
-              <Zap className="w-3.5 h-3.5 text-rose-600" />
-              OFERTAS RELÂMPAGO • LOTE LIMITADO
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-neutral-900 font-display">
-              Os Mais Desejados da Live
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8B1E3F] block mb-1">
+              Beauty Week • Seleção Especial
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-bold text-neutral-950 tracking-tight">
+              Destaques da Semana
             </h2>
-            <p className="text-xs sm:text-sm text-neutral-600 font-light mt-0.5">
-              Condições especiais com até 48% de desconto enquanto durarem os estoques do lote exclusivo.
-            </p>
           </div>
+          <p className="text-xs text-neutral-500 max-w-md sm:text-right">
+            Curadoria de fragrâncias e kits presenteáveis com condições exclusivas por tempo limitado.
+          </p>
         </div>
 
         {/* Product Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {flashProducts.map((product) => {
-            const soldPercent = product.soldPercentage || 75;
-            return (
-              <motion.div
-                key={product.id}
-                initial={{ opacity: 0, y: 15 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4 }}
-                className="group bg-white rounded-3xl border border-neutral-200/80 p-4 shadow-sm hover:shadow-xl hover:border-amber-300/80 transition-all duration-300 flex flex-col justify-between relative overflow-hidden"
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {featuredOffers.map((product) => (
+            <div
+              key={product.id}
+              className="group bg-[#F9F8F6] rounded-xl border border-neutral-200 p-4 hover:border-neutral-400 transition-colors flex flex-col justify-between"
+            >
+              {/* Image Container */}
+              <div
+                className="relative aspect-square rounded-lg overflow-hidden bg-white mb-4 cursor-pointer border border-neutral-100"
+                onClick={() => handleOpenDetail(product)}
               >
-                {/* Top Image Showcase */}
-                <div
-                  className="relative aspect-square rounded-2xl overflow-hidden bg-[#FAF8F5] mb-4 cursor-pointer"
-                  onClick={() => handleOpenDetail(product)}
-                >
-                  <img
-                    src={product.images[0]}
-                    alt={product.name}
-                    className="w-full h-full object-cover group-hover:scale-106 transition duration-700 ease-out"
-                    loading="lazy"
-                  />
-                  
-                  {/* Discount percentage tag */}
-                  {product.discountPercent && (
-                    <span className="absolute top-3 left-3 bg-rose-600 text-white text-[11px] font-black px-2.5 py-1 rounded-full shadow-md shimmer-badge tracking-tight">
-                      -{product.discountPercent}% OFF
-                    </span>
-                  )}
+                <img
+                  src={product.images[0]}
+                  alt={product.name}
+                  className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-500"
+                  loading="lazy"
+                />
+                
+                {/* Clean Discount Tag */}
+                {product.discountPercent && (
+                  <span className="absolute top-2.5 left-2.5 bg-[#8B1E3F] text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">
+                    -{product.discountPercent}%
+                  </span>
+                )}
+              </div>
 
-                  {/* Quick look preview button */}
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenDetail(product);
-                    }}
-                    className="absolute bottom-3 right-3 p-2 bg-white/90 backdrop-blur-xs rounded-full text-neutral-700 hover:text-rose-600 shadow-md transition cursor-pointer"
-                    title="Ver detalhes"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </motion.button>
+              {/* Info */}
+              <div className="flex-1 flex flex-col">
+                <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-1">
+                  <span>{product.category}</span>
+                  <span>{product.volume}</span>
                 </div>
 
-                {/* Info */}
-                <div className="flex-1 flex flex-col">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">
-                    {product.category} • {product.volume}
-                  </div>
+                <h3
+                  onClick={() => handleOpenDetail(product)}
+                  className="text-sm font-bold text-neutral-950 line-clamp-1 group-hover:text-[#8B1E3F] transition-colors cursor-pointer"
+                >
+                  {product.name}
+                </h3>
 
-                  <h3
-                    onClick={() => handleOpenDetail(product)}
-                    className="text-sm font-bold text-neutral-900 line-clamp-1 group-hover:text-rose-600 transition cursor-pointer"
-                  >
-                    {product.name}
-                  </h3>
+                <p className="text-xs text-neutral-500 line-clamp-1 mt-0.5 mb-2.5">
+                  {product.subtitle}
+                </p>
 
-                  <p className="text-xs text-neutral-500 line-clamp-1 mt-0.5 mb-3 font-light">
-                    {product.subtitle}
-                  </p>
+                {/* Rating */}
+                <div className="flex items-center gap-1 mb-3">
+                  <Star className="w-3.5 h-3.5 fill-neutral-900 stroke-neutral-900" />
+                  <span className="text-xs font-bold text-neutral-900">{product.rating.toFixed(1)}</span>
+                  <span className="text-[11px] text-neutral-400">({product.reviewCount})</span>
+                </div>
 
-                  {/* Pricing */}
-                  <div className="mt-auto">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-lg font-black text-neutral-900 font-display">
-                        {formatBRL(product.price)}
-                      </span>
+                {/* Pricing */}
+                <div className="mt-auto pt-3 border-t border-neutral-200/80">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-lg font-extrabold text-neutral-950">
+                      {formatBRL(product.price)}
+                    </span>
+                    {product.originalPrice > product.price && (
                       <span className="text-xs line-through text-neutral-400">
                         {formatBRL(product.originalPrice)}
                       </span>
-                    </div>
-                    <p className="text-[11px] text-rose-700 font-medium">
-                      ou {formatInstallment(product.price, 10)}
-                    </p>
+                    )}
                   </div>
-
-                  {/* Stock meter */}
-                  <div className="mt-3 pt-3 border-t border-neutral-100">
-                    <div className="flex items-center justify-between text-[11px] mb-1.5 font-semibold">
-                      <span className="text-rose-600 flex items-center gap-1">
-                        <Flame className="w-3 h-3 text-rose-500" />
-                        {soldPercent}% reservado
-                      </span>
-                      <span className="text-neutral-500 font-normal">Restam {product.stock} un.</span>
-                    </div>
-                    <div className="w-full bg-neutral-100 rounded-full h-2 overflow-hidden p-0.5">
-                      <div
-                        className="bg-gradient-to-r from-amber-500 via-rose-500 to-rose-600 h-full rounded-full transition-all duration-700"
-                        style={{ width: `${soldPercent}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Buy Button */}
-                  <motion.button
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.96 }}
-                    onClick={() => addToCart(product, 1)}
-                    className="mt-4 w-full py-2.5 rounded-full bg-neutral-900 hover:bg-rose-600 text-white text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 transition duration-300 shadow-sm hover:shadow-lg hover:shadow-rose-600/20 cursor-pointer"
-                  >
-                    <ShoppingBag className="w-3.5 h-3.5" />
-                    <span>Adicionar à Sacola</span>
-                  </motion.button>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    {formatInstallment(product.price, 10)}
+                  </p>
                 </div>
-              </motion.div>
-            );
-          })}
+
+                {/* Buy Button */}
+                <button
+                  onClick={() => addToCart(product, 1)}
+                  className="mt-3.5 w-full py-2.5 rounded-lg bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Adicionar à Sacola</span>
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
 
       </div>
