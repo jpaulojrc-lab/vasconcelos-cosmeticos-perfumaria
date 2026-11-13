@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, CartItem, Order, User, Review, Coupon, PushNotification, ShippingQuote, Address, PaymentReceipt } from '../types';
-import { INITIAL_PRODUCTS, INITIAL_ORDERS, INITIAL_REVIEWS, INITIAL_COUPONS, INITIAL_NOTIFICATIONS } from '../data/mockData';
 import {
   SUPABASE_TABLES,
   supabaseSelectAll,
@@ -147,10 +146,10 @@ interface StoreContextType {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // State initialization with localStorage fallback
+  // State initialization with localStorage fallback (sem dados fictícios iniciais)
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('vsc_products');
-    return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -165,22 +164,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('vsc_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [reviews, setReviews] = useState<Review[]>(() => {
     const saved = localStorage.getItem('vsc_reviews');
-    return saved ? JSON.parse(saved) : INITIAL_REVIEWS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [coupons, setCoupons] = useState<Coupon[]>(() => {
     const saved = localStorage.getItem('vsc_coupons');
-    return saved ? JSON.parse(saved) : INITIAL_COUPONS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [notifications, setNotifications] = useState<PushNotification[]>(() => {
     const saved = localStorage.getItem('vsc_notifications');
-    return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
+    return saved ? JSON.parse(saved) : [];
   });
 
   const [registeredUsers, setRegisteredUsers] = useState<User[]>(() => {
@@ -305,7 +304,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (prodRes.data.length > 0) {
         setProducts(prodRes.data.map(mapRowToProduct));
       } else {
-        await supabaseUpsert(SUPABASE_TABLES.products, products.map(mapProductToRow), 'id');
+        setProducts([]);
+        localStorage.removeItem('vsc_products');
       }
 
       // 2. Pedidos & Parcelas
@@ -332,14 +332,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             );
           }
         } else {
-          const settledMap: Record<string, number> = JSON.parse(
-            localStorage.getItem('vsc_settled_installments') || '{}'
-          );
-          await supabaseUpsert(
-            SUPABASE_TABLES.orders,
-            orders.map(o => mapOrderToRow(o, settledMap[o.id])),
-            'id'
-          );
+          setOrders([]);
+          localStorage.removeItem('vsc_orders');
+          localStorage.removeItem('vsc_settled_installments');
         }
       }
 
@@ -349,7 +344,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (coupRes.data.length > 0) {
           setCoupons(coupRes.data.map(mapRowToCoupon));
         } else {
-          await supabaseUpsert(SUPABASE_TABLES.coupons, coupons.map(mapCouponToRow), 'code');
+          setCoupons([]);
+          localStorage.removeItem('vsc_coupons');
         }
       }
 
@@ -359,15 +355,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (revRes.data.length > 0) {
           setReviews(revRes.data.map(mapRowToReview));
         } else {
-          await supabaseUpsert(SUPABASE_TABLES.reviews, reviews.map(mapReviewToRow), 'id');
+          setReviews([]);
+          localStorage.removeItem('vsc_reviews');
         }
       }
 
       // 5. Clientes
       const custRes = await supabaseSelectAll(SUPABASE_TABLES.customers, 'select=*');
-      if (custRes.ok && custRes.data.length > 0) {
-        const mappedCustomers = custRes.data.map(mapRowToCustomer);
-        setRegisteredUsers(mappedCustomers);
+      if (custRes.ok) {
+        if (custRes.data.length > 0) {
+          const mappedCustomers = custRes.data.map(mapRowToCustomer);
+          setRegisteredUsers(mappedCustomers);
+        } else {
+          setRegisteredUsers([]);
+          localStorage.removeItem('vsc_registered_users');
+        }
       }
 
       // 6. Notificações
@@ -376,11 +378,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (notifRes.data.length > 0) {
           setNotifications(notifRes.data.map(mapRowToNotification));
         } else {
-          await supabaseUpsert(
-            SUPABASE_TABLES.notifications,
-            notifications.map(mapNotificationToRow),
-            'id'
-          );
+          setNotifications([]);
+          localStorage.removeItem('vsc_notifications');
         }
       }
     })();
