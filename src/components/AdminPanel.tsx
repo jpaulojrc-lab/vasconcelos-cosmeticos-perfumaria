@@ -32,7 +32,9 @@ import {
   Phone,
   Copy,
   FileText,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Image as ImageIcon,
+  ClipboardPaste
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { Product, ProductCategory, Order, OrderStatus, Coupon, PaymentReceipt } from '../types';
@@ -40,6 +42,7 @@ import { formatBRL, formatDate } from '../utils/formatters';
 import { AdminLogin } from './AdminLogin';
 import { SUPABASE_TABLES, supabasePatch, supabaseUpsert } from '../lib/supabase';
 import { generateOrderConditionsPdf } from '../utils/pdfGenerator';
+import { extractProductFromImage } from '../utils/imageProductExtractor';
 
 function formatReceiptDateBr(dateStr: string): string {
   if (!dateStr) return '-';
@@ -196,9 +199,12 @@ export const AdminPanel: React.FC = () => {
   const [imagePreviewError, setImagePreviewError] = useState(false);
   const [formDescription, setFormDescription] = useState('');
 
-  // Link import states
+  // Link & Image import states
   const [importUrl, setImportUrl] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isExtractingImage, setIsExtractingImage] = useState(false);
+  const [autoRegisterOnImagePaste, setAutoRegisterOnImagePaste] = useState(true);
+  const [autoSavedProductToast, setAutoSavedProductToast] = useState<string | null>(null);
   const [extractFeedback, setExtractFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Additional product feature states
@@ -744,6 +750,131 @@ export const AdminPanel: React.FC = () => {
       });
     } finally {
       setIsRunningBatchAuto(false);
+    }
+  };
+
+  // Extract product data from pasted/uploaded promotional image
+  const handleExtractFromImage = async (file: File) => {
+    if (!file || !file.type.startsWith('image/')) {
+      setExtractFeedback({
+        type: 'error',
+        message: 'Por favor, cole ou selecione um arquivo de imagem válido (JPG, PNG ou WebP).'
+      });
+      return;
+    }
+
+    setIsExtractingImage(true);
+    setExtractFeedback(null);
+
+    try {
+      const extracted = await extractProductFromImage(file);
+
+      if (extracted.name) setFormName(extracted.name);
+      if (extracted.subtitle) setFormSubtitle(extracted.subtitle);
+      if (extracted.category) setFormCategory(extracted.category);
+      if (extracted.price > 0) setFormPrice(extracted.price.toFixed(2));
+      if (extracted.originalPrice > 0) setFormOriginalPrice(extracted.originalPrice.toFixed(2));
+      if (extracted.volume) setFormVolume(extracted.volume);
+      if (extracted.description) setFormDescription(extracted.description);
+      if (extracted.imageDataUrl) {
+        setFormImage(extracted.imageDataUrl);
+        setImagePreviewError(false);
+      }
+      if (extracted.notes) {
+        setFormNotesTopo(extracted.notes.topo || '');
+        setFormNotesCoracao(extracted.notes.coracao || '');
+        setFormNotesFundo(extracted.notes.fundo || '');
+      }
+      if (extracted.benefits && extracted.benefits.length > 0) {
+        setFormBenefitsText(extracted.benefits.join('\n'));
+      }
+      if (extracted.actives && extracted.actives.length > 0) {
+        setFormActivesText(extracted.actives.join(', '));
+      }
+
+      if (autoRegisterOnImagePaste && extracted.name && extracted.price > 0) {
+        const priceNum = extracted.price;
+        const originalPriceNum =
+          extracted.originalPrice > priceNum ? extracted.originalPrice : priceNum;
+        const discount =
+          originalPriceNum > priceNum
+            ? Math.round(((originalPriceNum - priceNum) / originalPriceNum) * 100)
+            : 0;
+
+        addProduct({
+          name: extracted.name,
+          subtitle:
+            extracted.subtitle || 'Fragrância marcante e cuidado exclusivo para sua rotina',
+          category: extracted.category,
+          price: priceNum,
+          originalPrice: originalPriceNum,
+          discountPercent: discount > 0 ? discount : undefined,
+          stock: parseInt(formStock) || 50,
+          volume: extracted.volume || '',
+          description: extracted.description,
+          images: [extracted.imageDataUrl],
+          rating: 5.0,
+          reviewCount: 1,
+          benefits:
+            extracted.benefits.length > 0
+              ? extracted.benefits
+              : [
+                  'Fórmula exclusiva vasconcelos Presente',
+                  'Fragrância marcante',
+                  'Testado dermatologicamente'
+                ],
+          notes:
+            extracted.notes &&
+            (extracted.notes.topo || extracted.notes.coracao || extracted.notes.fundo)
+              ? {
+                  topo: extracted.notes.topo || '',
+                  coracao: extracted.notes.coracao || '',
+                  fundo: extracted.notes.fundo || ''
+                }
+              : undefined,
+          actives: extracted.actives.length > 0 ? extracted.actives : undefined,
+          isBestSeller: true
+        });
+
+        setIsProductModalOpen(false);
+        setAutoSavedProductToast(
+          `✅ Produto "${extracted.name}" (${formatBRL(priceNum)}) identificado pela imagem e cadastrado automaticamente!`
+        );
+        return;
+      }
+
+      setExtractFeedback({
+        type: 'success',
+        message:
+          extracted.price > 0
+            ? '✨ Informações e foto extraídas da imagem com sucesso! Revise os campos e clique em Salvar.'
+            : '✨ Foto e nome identificados! Informe o preço promocional abaixo e clique em Salvar.'
+      });
+    } catch (err: any) {
+      setExtractFeedback({
+        type: 'error',
+        message:
+          err?.message ||
+          'Não foi possível ler os dados da imagem. Preencha os campos abaixo manualmente.'
+      });
+    } finally {
+      setIsExtractingImage(false);
+    }
+  };
+
+  const handleModalImagePaste = (e: React.ClipboardEvent) => {
+    if (editingProductId) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) {
+          e.preventDefault();
+          handleExtractFromImage(file);
+          return;
+        }
+      }
     }
   };
 
@@ -2165,6 +2296,19 @@ export const AdminPanel: React.FC = () => {
               </button>
             </div>
 
+            {autoSavedProductToast && (
+              <div className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold shadow-2xs">
+                <span>{autoSavedProductToast}</span>
+                <button
+                  type="button"
+                  onClick={() => setAutoSavedProductToast(null)}
+                  className="text-emerald-700 hover:text-emerald-950 p-1 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             {/* Products Table */}
             <div className="bg-white rounded-3xl border border-neutral-200 shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
@@ -3075,7 +3219,10 @@ export const AdminPanel: React.FC = () => {
       {/* Product Add / Edit Modal */}
       {isProductModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-          <div className="relative bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
+          <div
+            onPaste={handleModalImagePaste}
+            className="relative bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto"
+          >
             <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-pink-50 flex items-center justify-center text-pink-600">
@@ -3163,6 +3310,64 @@ export const AdminPanel: React.FC = () => {
                     <span>🌸 Body Splash Heaven Pink 200ml (WePink)</span>
                     <ExternalLink className="w-2.5 h-2.5" />
                   </button>
+                </div>
+
+                {/* Colar / Enviar Imagem Promocional (Ctrl+V) */}
+                <div className="pt-2 border-t border-pink-200/70 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-pink-900 flex items-center gap-1.5">
+                      <ClipboardPaste className="w-3.5 h-3.5 text-pink-600" />
+                      <span>Ou cole uma imagem de catálogo (Ctrl+V)</span>
+                    </span>
+
+                    <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-neutral-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={autoRegisterOnImagePaste}
+                        onChange={(e) => setAutoRegisterOnImagePaste(e.target.checked)}
+                        className="rounded border-pink-300 text-pink-600 focus:ring-pink-500"
+                      />
+                      <span>Cadastrar automaticamente ao identificar</span>
+                    </label>
+                  </div>
+
+                  <label
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleExtractFromImage(file);
+                    }}
+                    className={`flex items-center justify-center gap-2.5 w-full rounded-xl border-2 border-dashed px-4 py-3 text-xs font-semibold transition cursor-pointer ${isExtractingImage
+                      ? 'border-pink-400 bg-pink-100/60 text-pink-900'
+                      : 'border-pink-300 bg-white/80 hover:bg-white text-neutral-700'
+                      }`}
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={isExtractingImage}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleExtractFromImage(file);
+                        e.target.value = '';
+                      }}
+                    />
+                    {isExtractingImage ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-pink-600" />
+                        <span>Lendo imagem e identificando nome, preço e foto...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon className="w-4 h-4 text-pink-600 shrink-0" />
+                        <span>
+                          Clique para escolher a imagem ou pressione <strong>Ctrl+V</strong> em qualquer lugar desta janela
+                        </span>
+                      </>
+                    )}
+                  </label>
                 </div>
 
                 {/* Feedback da extração */}
