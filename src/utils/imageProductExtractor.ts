@@ -27,7 +27,7 @@ function loadImageElement(src: string): Promise<HTMLImageElement> {
 
 export async function compressImageFile(
   file: File,
-  maxDim = 960
+  maxDim = 720
 ): Promise<{ dataUrl: string; mimeType: string }> {
   const rawDataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -51,7 +51,7 @@ export async function compressImageFile(
   if (!ctx) return { dataUrl: rawDataUrl, mimeType: file.type || 'image/jpeg' };
   ctx.drawImage(img, 0, 0, width, height);
 
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.86);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
   return { dataUrl, mimeType: 'image/jpeg' };
 }
 
@@ -255,3 +255,4 @@ export async function extractProductFromImage(file: File): Promise<ExtractedImag
     source: 'ocr-local'
   };
 }
+

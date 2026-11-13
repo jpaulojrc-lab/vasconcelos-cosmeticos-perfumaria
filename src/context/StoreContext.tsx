@@ -416,41 +416,49 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Sync to local storage
+  const safeSetLocalStorage = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Evita falha fatal (QuotaExceededError) caso o navegador atinja o limite de armazenamento local
+    }
+  };
+
   useEffect(() => {
-    localStorage.setItem('vsc_products', JSON.stringify(products));
+    safeSetLocalStorage('vsc_products', JSON.stringify(products));
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem('vsc_cart', JSON.stringify(cart));
+    safeSetLocalStorage('vsc_cart', JSON.stringify(cart));
   }, [cart]);
 
   useEffect(() => {
-    localStorage.setItem('vsc_wishlist', JSON.stringify(wishlist));
+    safeSetLocalStorage('vsc_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
 
   useEffect(() => {
-    localStorage.setItem('vsc_orders', JSON.stringify(orders));
+    safeSetLocalStorage('vsc_orders', JSON.stringify(orders));
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem('vsc_reviews', JSON.stringify(reviews));
+    safeSetLocalStorage('vsc_reviews', JSON.stringify(reviews));
   }, [reviews]);
 
   useEffect(() => {
-    localStorage.setItem('vsc_coupons', JSON.stringify(coupons));
+    safeSetLocalStorage('vsc_coupons', JSON.stringify(coupons));
   }, [coupons]);
 
   useEffect(() => {
-    localStorage.setItem('vsc_notifications', JSON.stringify(notifications));
+    safeSetLocalStorage('vsc_notifications', JSON.stringify(notifications));
   }, [notifications]);
 
   useEffect(() => {
-    localStorage.setItem('vsc_registered_users', JSON.stringify(registeredUsers));
+    safeSetLocalStorage('vsc_registered_users', JSON.stringify(registeredUsers));
   }, [registeredUsers]);
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('vsc_user', JSON.stringify(currentUser));
+      safeSetLocalStorage('vsc_user', JSON.stringify(currentUser));
     } else {
       localStorage.removeItem('vsc_user');
     }

@@ -1424,14 +1424,19 @@ export const AdminPanel: React.FC = () => {
   const filteredFinancialOrders = financialOrders.filter(f => {
     if (financeFilter === 'avista' && !f.isCash) return false;
     if (financeFilter === 'parcelado' && !f.isInstallment) return false;
-    if (financeFilter === 'pendentes' && f.remainingBalance <= 0.01) return false;
+    if (
+      financeFilter === 'pendentes' &&
+      (f.remainingBalance <= 0.01 || f.order.orderStatus === 'cancelado')
+    ) {
+      return false;
+    }
     if (financeFilter === 'quitados' && !(f.remainingBalance <= 0.01 && f.receivedGross > 0)) return false;
 
     const matchesStatus =
       orderStatusFilter === 'todos'
         ? true
         : orderStatusFilter === 'aguardando'
-          ? f.order.orderStatus !== 'entregue'
+          ? f.order.orderStatus !== 'entregue' && f.order.orderStatus !== 'cancelado'
           : f.order.orderStatus === orderStatusFilter;
 
     const matchesQuery =
