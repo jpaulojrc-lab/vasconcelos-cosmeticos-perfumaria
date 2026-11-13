@@ -92,7 +92,7 @@ export interface User {
 
 export type PaymentMethod = 'pix' | 'credit_card' | 'boleto';
 
-export type OrderStatus = 'pendente' | 'pago' | 'separacao' | 'enviado' | 'entregue';
+export type OrderStatus = 'pendente' | 'pago' | 'separacao' | 'enviado' | 'entregue' | 'cancelado';
 
 export interface OrderItem {
   productId: string;

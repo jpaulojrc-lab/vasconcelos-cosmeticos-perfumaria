@@ -101,6 +101,7 @@ interface StoreContextType {
   // Orders
   createOrder: (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => Order;
   updateOrderStatus: (orderId: string, status: Order['orderStatus'], trackingCode?: string) => void;
+  deleteOrder: (orderId: string) => void;
   updateOrderPaymentConditions: (
     orderId: string,
     conditions: {
@@ -1025,7 +1026,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             ...o,
             orderStatus: status,
             trackingCode: trackingCode || o.trackingCode,
-            paymentStatus: status === 'pendente' ? o.paymentStatus : 'paid'
+            paymentStatus:
+              status === 'cancelado'
+                ? 'failed'
+                : status === 'pendente'
+                  ? o.paymentStatus === 'failed'
+                    ? 'pending'
+                    : o.paymentStatus
+                  : 'paid'
           };
           supabasePatch(SUPABASE_TABLES.orders, `id=eq.${encodeURIComponent(orderId)}`, {
             order_status: updated.orderStatus,
@@ -1037,6 +1045,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return o;
       })
     );
+  };
+
+  const deleteOrder = (orderId: string) => {
+    setOrders(prev => prev.filter(o => o.id !== orderId));
+    supabaseDelete(SUPABASE_TABLES.orders, `id=eq.${encodeURIComponent(orderId)}`);
   };
 
   const updateOrderPaymentConditions = (
@@ -1298,6 +1311,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         notifyCustomersAboutCoupon,
         createOrder,
         updateOrderStatus,
+        deleteOrder,
         updateOrderPaymentConditions,
         addReview,
         getProductReviews,
