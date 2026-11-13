@@ -163,6 +163,7 @@ export const AdminPanel: React.FC = () => {
   const [formStock, setFormStock] = useState('50');
   const [formVolume, setFormVolume] = useState('100ml');
   const [formImage, setFormImage] = useState('');
+  const [imagePreviewError, setImagePreviewError] = useState(false);
   const [formDescription, setFormDescription] = useState('');
 
   // Link import states
@@ -743,7 +744,10 @@ export const AdminPanel: React.FC = () => {
       if (p.volume) setFormVolume(p.volume);
       if (p.stock) setFormStock(p.stock.toString());
       if (p.description) setFormDescription(p.description);
-      if (p.images && p.images.length > 0) setFormImage(p.images[0]);
+      if (p.images && p.images.length > 0) {
+        setFormImage(p.images[0]);
+        setImagePreviewError(false);
+      }
 
       if (p.notes) {
         setFormNotesTopo(p.notes.topo || '');
@@ -761,7 +765,10 @@ export const AdminPanel: React.FC = () => {
 
       setExtractFeedback({
         type: 'success',
-        message: '✨ Dados do produto, fotos e características extraídos com sucesso! Revise e clique em Salvar.'
+        message:
+          json.source === 'heuristic'
+            ? '⚠️ Este site bloqueou a leitura automática da foto/preço. Preenchemos o nome pelo link — use "Enviar Foto" do celular/PC ou cole o link direto da imagem e ajuste o preço.'
+            : '✨ Dados do produto, fotos e características extraídos com sucesso! Revise e clique em Salvar.'
       });
     } catch (err: any) {
       setExtractFeedback({
@@ -773,10 +780,52 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  // Upload de foto direto do celular ou computador com compressão leve
+  const handleProductImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxSide = 700;
+        let { width, height } = img;
+        if (width > maxSide || height > maxSide) {
+          if (width >= height) {
+            height = Math.round((height * maxSide) / width);
+            width = maxSide;
+          } else {
+            width = Math.round((width * maxSide) / height);
+            height = maxSide;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          setFormImage(compressedDataUrl);
+          setImagePreviewError(false);
+        } else if (typeof reader.result === 'string') {
+          setFormImage(reader.result);
+          setImagePreviewError(false);
+        }
+      };
+      if (typeof reader.result === 'string') {
+        img.src = reader.result;
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Open product editor
   const handleOpenProductEdit = (product?: Product) => {
     setImportUrl('');
     setExtractFeedback(null);
+    setImagePreviewError(false);
 
     if (product) {
       setEditingProductId(product.id);
@@ -3274,39 +3323,81 @@ export const AdminPanel: React.FC = () => {
                 </div>
               </div>
 
-              {/* IMAGEM DO PRODUTO COM PREVIEW EM TEMPO REAL */}
-              <div>
-                <label className="font-bold text-neutral-700 flex items-center justify-between">
-                  <span>URL da Imagem do Produto</span>
-                  {formImage && (
-                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+              {/* IMAGEM DO PRODUTO COM PREVIEW EM TEMPO REAL + UPLOAD DA GALERIA/PC */}
+              <div className="space-y-2">
+                <label className="font-bold text-neutral-700 flex items-center justify-between gap-2">
+                  <span>Foto do Produto (Enviar do Celular/PC ou Colar Link da Imagem)</span>
+                  {formImage && !imagePreviewError && (
+                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1 shrink-0">
                       <CheckCircle2 className="w-3 h-3" /> Imagem carregada
                     </span>
                   )}
+                  {imagePreviewError && (
+                    <span className="text-[10px] text-amber-700 font-bold flex items-center gap-1 shrink-0">
+                      ⚠️ Link inválido para imagem
+                    </span>
+                  )}
                 </label>
-                <div className="mt-1 flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-xl border border-neutral-200 overflow-hidden bg-neutral-100 shrink-0 flex items-center justify-center shadow-2xs">
-                    {formImage ? (
-                      <img
-                        src={formImage}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&w=400&q=80';
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                  <div className="flex items-center gap-2.5 flex-1">
+                    <div className="w-14 h-14 rounded-xl border border-neutral-200 overflow-hidden bg-neutral-100 shrink-0 flex items-center justify-center shadow-2xs">
+                      {formImage && !imagePreviewError ? (
+                        <img
+                          src={formImage}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                          onError={() => setImagePreviewError(true)}
+                        />
+                      ) : (
+                        <Package className="w-6 h-6 text-neutral-400" />
+                      )}
+                    </div>
+
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={formImage}
+                        onChange={(e) => {
+                          setFormImage(e.target.value);
+                          setImagePreviewError(false);
                         }}
+                        placeholder="Cole o link direto da imagem (.jpg / .png) ou envie uma foto ao lado"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl pl-3 pr-8 py-2.5 text-xs font-mono focus:bg-white"
                       />
-                    ) : (
-                      <Package className="w-6 h-6 text-neutral-400" />
-                    )}
+                      {formImage && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormImage('');
+                            setImagePreviewError(false);
+                          }}
+                          className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-red-600 cursor-pointer"
+                          title="Limpar imagem"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <input
-                    type="url"
-                    value={formImage}
-                    onChange={(e) => setFormImage(e.target.value)}
-                    placeholder="https://..."
-                    className="flex-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2.5 text-xs font-mono focus:bg-white"
-                  />
+
+                  <label className="px-3.5 py-2.5 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer transition shrink-0">
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Enviar Foto (Galeria / PC)</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProductImageUpload}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
+
+                {imagePreviewError && (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-medium">
+                    Este link aponta para uma página e não diretamente para a foto. Clique em <strong>Enviar Foto (Galeria / PC)</strong> ou cole o endereço direto da imagem.
+                  </p>
+                )}
               </div>
 
               {/* CARACTERÍSTICAS / PIRÂMIDE OLFATIVA (para perfumes e body splashes) */}
