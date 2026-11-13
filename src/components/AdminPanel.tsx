@@ -65,6 +65,8 @@ export const AdminPanel: React.FC = () => {
     updateOrderStatus,
     deleteOrder,
     updateOrderPaymentConditions,
+    registerCustomerByAdmin,
+    deleteCustomerByAdmin,
     coupons,
     addCoupon,
     updateCoupon,
@@ -174,7 +176,36 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'relatorios' | 'estoque' | 'cupons' | 'cobranca'>('relatorios');
+  const [activeTab, setActiveTab] = useState<'relatorios' | 'estoque' | 'cupons' | 'cobranca' | 'clientes'>('relatorios');
+
+  // Cadastro rápido de Clientes (Telefone como chave principal, E-mail opcional)
+  const [customerNameInput, setCustomerNameInput] = useState('');
+  const [customerPhoneInput, setCustomerPhoneInput] = useState('');
+  const [customerEmailInput, setCustomerEmailInput] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerFeedback, setCustomerFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const formatPhoneMask = (val: string) => {
+    const digits = val.replace(/\D/g, '').slice(0, 11);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  };
+
+  const handleSaveAdminCustomer = (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = registerCustomerByAdmin({
+      name: customerNameInput,
+      phone: customerPhoneInput,
+      email: customerEmailInput
+    });
+    setCustomerFeedback({ type: res.success ? 'success' : 'error', message: res.message });
+    if (res.success) {
+      setCustomerNameInput('');
+      setCustomerPhoneInput('');
+      setCustomerEmailInput('');
+    }
+  };
 
   // Filters for Stock
   const [productSearch, setProductSearch] = useState('');
@@ -1630,6 +1661,17 @@ export const AdminPanel: React.FC = () => {
           >
             <MessageCircle className="w-4 h-4" />
             <span>Cobrança (WhatsApp & E-mail)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('clientes')}
+            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'clientes'
+              ? 'border-white text-white'
+              : 'border-transparent text-neutral-400 hover:text-white'
+              }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Clientes ({registeredUsers.length})</span>
           </button>
         </div>
       </div>
@@ -3256,6 +3298,196 @@ export const AdminPanel: React.FC = () => {
           </div>
         )}
 
+        {/* =========================================================
+            TAB 5: CADASTRO DE CLIENTES (TELEFONE COMO CHAVE)
+           ========================================================= */}
+        {activeTab === 'clientes' && (
+          <div className="space-y-6">
+            {/* Formulário de Cadastro Rápido */}
+            <div className="bg-white rounded-3xl border border-neutral-200 p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-neutral-100">
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#8B1E3F]">
+                    Cadastro de Clientes • Vendas por Telefone ou Loja
+                  </span>
+                  <h2 className="text-lg font-extrabold text-neutral-950 font-display">
+                    Cadastrar Novo Cliente
+                  </h2>
+                  <p className="text-xs text-neutral-500">
+                    O <strong>Telefone / WhatsApp</strong> é a chave principal: quando o cliente acessar o site e informar o número, o sistema já reconhece o cadastro automaticamente.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveAdminCustomer} className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end text-xs">
+                <div>
+                  <label className="font-bold text-neutral-800 block mb-1">
+                    Nome Completo *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={customerNameInput}
+                    onChange={(e) => setCustomerNameInput(e.target.value)}
+                    placeholder="Ex: Maria da Silva"
+                    className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2.5 text-xs focus:bg-white focus:ring-2 focus:ring-[#8B1E3F]"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-800 block mb-1">
+                    Telefone / WhatsApp * <span className="text-[10px] font-semibold text-pink-700">(Chave)</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={customerPhoneInput}
+                    onChange={(e) => setCustomerPhoneInput(formatPhoneMask(e.target.value))}
+                    placeholder="(92) 99999-9999"
+                    className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2.5 text-xs font-mono focus:bg-white focus:ring-2 focus:ring-[#8B1E3F]"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    E-mail <span className="text-[10px] font-normal text-neutral-400">(Opcional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={customerEmailInput}
+                    onChange={(e) => setCustomerEmailInput(e.target.value)}
+                    placeholder="cliente@email.com (opcional)"
+                    className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2.5 text-xs focus:bg-white focus:ring-2 focus:ring-[#8B1E3F]"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 px-4 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white font-extrabold text-xs flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Cadastrar Cliente</span>
+                </button>
+              </form>
+
+              {customerFeedback && (
+                <div
+                  className={`flex items-start gap-2 p-3 rounded-xl text-xs font-semibold ${customerFeedback.type === 'success'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200'
+                    }`}
+                >
+                  {customerFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <span>{customerFeedback.message}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Lista de Clientes Cadastrados */}
+            <div className="bg-white rounded-3xl border border-neutral-200 p-5 sm:p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h3 className="text-sm font-extrabold text-neutral-900 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-[#8B1E3F]" />
+                  <span>Clientes Cadastrados ({registeredUsers.length})</span>
+                </h3>
+
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-3.5 h-3.5 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                    placeholder="Buscar por nome, telefone ou e-mail..."
+                    className="w-full bg-neutral-50 border border-neutral-300 rounded-xl pl-8 pr-3 py-2 text-xs focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {registeredUsers.length === 0 ? (
+                <div className="py-10 text-center text-xs text-neutral-500 border border-dashed border-neutral-200 rounded-2xl">
+                  Nenhum cliente cadastrado ainda. Use o formulário acima para cadastrar clientes pelo Nome e Telefone.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-neutral-50 text-neutral-500 font-bold uppercase border-b border-neutral-200">
+                      <tr>
+                        <th className="py-2.5 px-3">Nome</th>
+                        <th className="py-2.5 px-3">Telefone (Chave)</th>
+                        <th className="py-2.5 px-3">E-mail</th>
+                        <th className="py-2.5 px-3 text-center">Pedidos</th>
+                        <th className="py-2.5 px-3 text-right">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {registeredUsers
+                        .filter((u) => {
+                          const q = customerSearch.trim().toLowerCase();
+                          if (!q) return true;
+                          return (
+                            (u.name || '').toLowerCase().includes(q) ||
+                            (u.phone || '').toLowerCase().includes(q) ||
+                            (u.email || '').toLowerCase().includes(q)
+                          );
+                        })
+                        .map((u) => {
+                          const displayEmail =
+                            u.email && !u.email.endsWith('@vasconcelos.local')
+                              ? u.email
+                              : 'Não informado';
+                          const phoneDigits = (u.phone || '').replace(/\D/g, '');
+                          const custOrderCount = orders.filter((o) => {
+                            const oDigits = (o.customer?.phone || '').replace(/\D/g, '');
+                            return (
+                              (phoneDigits.length >= 10 && oDigits.endsWith(phoneDigits.slice(-10))) ||
+                              (u.email && !u.email.endsWith('@vasconcelos.local') && o.customer?.email?.toLowerCase() === u.email.toLowerCase())
+                            );
+                          }).length;
+
+                          return (
+                            <tr key={u.id} className="hover:bg-neutral-50">
+                              <td className="py-2.5 px-3 font-bold text-neutral-900">
+                                {u.name}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-emerald-800">
+                                {u.phone || 'Sem telefone'}
+                              </td>
+                              <td className="py-2.5 px-3 text-neutral-500">
+                                {displayEmail}
+                              </td>
+                              <td className="py-2.5 px-3 text-center">
+                                <span className="px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-700 font-bold text-[10px]">
+                                  {custOrderCount}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`Excluir o cadastro de ${u.name}?`)) {
+                                      deleteCustomerByAdmin(u.id);
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-bold text-[11px] transition cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Excluir</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Product Add / Edit Modal */}
@@ -4295,6 +4527,19 @@ export const AdminPanel: React.FC = () => {
         >
           <MessageCircle className="w-5 h-5" />
           <span className="text-[10px]">Cobrança</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('clientes');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${activeTab === 'clientes' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
+            }`}
+        >
+          <Users className="w-5 h-5" />
+          <span className="text-[10px]">Clientes</span>
         </button>
 
         <button

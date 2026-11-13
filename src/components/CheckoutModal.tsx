@@ -44,6 +44,7 @@ export const CheckoutModal: React.FC = () => {
     currentUser,
     orders,
     registeredUsers,
+    findCustomerByPhone,
     createOrder,
     setIsAccountOpen,
     sendPushNotification
@@ -497,7 +498,14 @@ export const CheckoutModal: React.FC = () => {
                         type="tel"
                         required
                         value={phone}
-                        onChange={(e) => setPhone(formatPhoneMask(e.target.value))}
+                        onChange={(e) => {
+                          const formatted = formatPhoneMask(e.target.value);
+                          setPhone(formatted);
+                          const matched = findCustomerByPhone(formatted);
+                          if (matched && !name.trim()) {
+                            setName(matched.name);
+                          }
+                        }}
                         placeholder="(92) 98479-7348"
                         className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 focus:border-neutral-950 focus:bg-white outline-hidden font-mono"
                       />

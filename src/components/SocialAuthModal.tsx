@@ -42,6 +42,8 @@ export const SocialAuthModal: React.FC = () => {
     orders,
     registeredUsers,
     loginWithEmail,
+    findCustomerByPhone,
+    loginWithPhone,
     sendPushNotification
   } = useStore();
 
@@ -107,7 +109,10 @@ export const SocialAuthModal: React.FC = () => {
       const key = custName.toLowerCase();
       const custPhone = (u.phone || '').trim();
       const rawEmail = (u.email || '').trim().toLowerCase();
-      const custEmail = rawEmail && rawEmail !== ADMIN_DEFAULT_EMAIL ? rawEmail : '';
+      const custEmail =
+        rawEmail && rawEmail !== ADMIN_DEFAULT_EMAIL && !rawEmail.endsWith('@vasconcelos.local')
+          ? rawEmail
+          : '';
 
       const existing = map.get(key);
       if (existing) {
@@ -275,6 +280,8 @@ export const SocialAuthModal: React.FC = () => {
 
     const cleanEmail = email.trim().toLowerCase();
     const phoneDigits = phone.replace(/\D/g, '');
+    const effectiveEmail =
+      cleanEmail || (phoneDigits.length >= 10 ? `cliente.${phoneDigits}@vasconcelos.local` : '');
 
     if (isRegisterMode) {
       if (!name.trim()) {
@@ -287,8 +294,8 @@ export const SocialAuthModal: React.FC = () => {
         return;
       }
 
-      if (!cleanEmail || !cleanEmail.includes('@')) {
-        setErrorMsg('Informe um endereço de e-mail válido.');
+      if (cleanEmail && !cleanEmail.includes('@')) {
+        setErrorMsg('Informe um endereço de e-mail válido ou deixe em branco.');
         return;
       }
 
@@ -297,12 +304,23 @@ export const SocialAuthModal: React.FC = () => {
         return;
       }
 
-      const alreadyRegistered = registeredUsers.some(
-        (u) => u.email.toLowerCase() === cleanEmail
-      );
+      const alreadyRegistered = cleanEmail
+        ? registeredUsers.some((u) => u.email.toLowerCase() === cleanEmail)
+        : false;
       if (alreadyRegistered) {
         setErrorMsg('Este e-mail já possui cadastro. Clique em "Já possui cadastro? Acesse sua conta".');
         return;
+      }
+
+      const existingByPhone = findCustomerByPhone(phone);
+      if (existingByPhone) {
+        const resPhone = loginWithPhone(phone);
+        if (resPhone.success && resPhone.user) {
+          setAuthenticatedUser(resPhone.user);
+          setIsNewRegistration(false);
+          setStep('success');
+          return;
+        }
       }
 
       // Generate 6-digit verification code and send to customer's phone
@@ -365,7 +383,9 @@ export const SocialAuthModal: React.FC = () => {
 
     setIsLoading(true);
     setTimeout(() => {
-      const res = loginWithEmail(email, name, password, phone, true);
+      const safeEmail =
+        email.trim().toLowerCase() || `cliente.${phone.replace(/\D/g, '')}@vasconcelos.local`;
+      const res = loginWithEmail(safeEmail, name, password, phone, true);
       setIsLoading(false);
 
       if (!res.success) {
@@ -450,6 +470,38 @@ export const SocialAuthModal: React.FC = () => {
 
             {/* Direct Registration / Login Form */}
             <form onSubmit={handleSubmitForm} className="space-y-3.5">
+              {/* Reconhecimento instantâneo pelo Telefone (se cadastrado pelo ADM ou compra anterior) */}
+              {(() => {
+                const matchedPhoneUser = findCustomerByPhone(phone);
+                if (!matchedPhoneUser) return null;
+                return (
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-extrabold truncate">
+                        ✅ Cadastro encontrado: {matchedPhoneUser.name}
+                      </p>
+                      <p className="text-[10px] text-emerald-700">
+                        Seu telefone já está cadastrado na loja!
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const res = loginWithPhone(phone);
+                        if (res.success && res.user) {
+                          setAuthenticatedUser(res.user);
+                          setIsNewRegistration(false);
+                          setStep('success');
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-extrabold shrink-0 cursor-pointer"
+                    >
+                      Entrar Agora
+                    </button>
+                  </div>
+                );
+              })()}
+
               {isRegisterMode && (
                 <>
                   {/* NOME COMPLETO COM AUTO-SUGESTÃO DE COMPRAS ANTERIORES */}
@@ -558,18 +610,18 @@ export const SocialAuthModal: React.FC = () => {
                 </>
               )}
 
-              {/* E-MAIL OBRIGATÓRIO */}
+              {/* E-MAIL OPCIONAL NO CADASTRO */}
               <div>
                 <label className="text-[11px] font-bold text-neutral-800">
-                  E-mail <span className="text-[#8B1E3F]">*</span>
+                  E-mail {isRegisterMode ? <span className="text-neutral-400 font-normal">(Opcional)</span> : <span className="text-[#8B1E3F]">*</span>}
                 </label>
                 <div className="relative mt-1">
                   <input
                     type="email"
-                    required
+                    required={!isRegisterMode}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="seuemail@exemplo.com"
+                    placeholder={isRegisterMode ? 'seuemail@exemplo.com (opcional)' : 'seuemail@exemplo.com'}
                     className="w-full bg-[#F7F6F2] border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-xs text-neutral-900 outline-hidden focus:border-neutral-900 focus:bg-white transition"
                   />
                   <Mail className="w-4 h-4 text-neutral-400 absolute left-3 top-3" />

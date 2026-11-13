@@ -79,6 +79,14 @@ interface StoreContextType {
     phone?: string,
     isRegister?: boolean
   ) => { success: boolean; message: string; user?: User };
+  findCustomerByPhone: (phone: string) => User | undefined;
+  loginWithPhone: (phone: string) => { success: boolean; message: string; user?: User };
+  registerCustomerByAdmin: (data: {
+    name: string;
+    phone: string;
+    email?: string;
+  }) => { success: boolean; message: string; user?: User };
+  deleteCustomerByAdmin: (userId: string) => void;
   logout: () => void;
   updateUserProfile: (data: Partial<User>) => void;
 
@@ -259,12 +267,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ),
         ...(registeredUsers.length > 0
           ? [
-              supabaseUpsert(
-                SUPABASE_TABLES.customers,
-                registeredUsers.map(u => mapCustomerToRow(u)),
-                'id'
-              )
-            ]
+            supabaseUpsert(
+              SUPABASE_TABLES.customers,
+              registeredUsers.map(u => mapCustomerToRow(u)),
+              'id'
+            )
+          ]
           : [])
       ]);
 
@@ -733,6 +741,156 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const normalizePhoneKey = (rawPhone?: string): string => {
+    const digits = (rawPhone || '').replace(/\D/g, '');
+    if (digits.length > 11 && digits.startsWith('55')) {
+      return digits.slice(2);
+    }
+    return digits;
+  };
+
+  const findCustomerByPhone = (phone: string): User | undefined => {
+    const targetKey = normalizePhoneKey(phone);
+    if (targetKey.length < 10) return undefined;
+
+    const fromUsers = registeredUsers.find(
+      u => normalizePhoneKey(u.phone) === targetKey
+    );
+    if (fromUsers) return fromUsers;
+
+    const fromOrder = orders.find(
+      o => normalizePhoneKey(o.customer?.phone) === targetKey
+    );
+    if (fromOrder) {
+      const custName = (fromOrder.customer.name || 'Cliente Vasconcelos').trim();
+      const rawEmail = (fromOrder.customer.email || '').trim().toLowerCase();
+      return {
+        id: `usr-ord-${targetKey}`,
+        name: custName,
+        email: rawEmail && rawEmail.includes('@') ? rawEmail : `cliente.${targetKey}@vasconcelos.local`,
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(custName)}&background=db2777&color=fff&bold=true`,
+        phone: fromOrder.customer.phone,
+        provider: 'email',
+        isAdmin: false,
+        phoneVerified: true,
+        addresses: []
+      };
+    }
+
+    return undefined;
+  };
+
+  const loginWithPhone = (
+    phone: string
+  ): { success: boolean; message: string; user?: User } => {
+    const targetKey = normalizePhoneKey(phone);
+    if (targetKey.length < 10) {
+      return {
+        success: false,
+        message: 'Informe um número de telefone/WhatsApp válido com DDD.'
+      };
+    }
+
+    const found = findCustomerByPhone(phone);
+    if (!found) {
+      return {
+        success: false,
+        message: 'Telefone ainda não cadastrado. Preencha seu Nome abaixo para criar seu cadastro.'
+      };
+    }
+
+    const alreadyInUsers = registeredUsers.some(u => u.id === found.id);
+    if (!alreadyInUsers) {
+      setRegisteredUsers(prev => [found, ...prev]);
+      supabaseUpsert(SUPABASE_TABLES.customers, mapCustomerToRow(found), 'id');
+    }
+
+    setCurrentUser(found);
+    const welcomeCoupon = coupons.find(c => c.code === 'BEMVINDO10');
+    if (welcomeCoupon && !appliedCoupon) {
+      setAppliedCoupon(welcomeCoupon);
+    }
+
+    return {
+      success: true,
+      message: `Bem-vinda(o) de volta, ${found.name}! Seu cadastro foi reconhecido pelo telefone.`,
+      user: found
+    };
+  };
+
+  const registerCustomerByAdmin = (data: {
+    name: string;
+    phone: string;
+    email?: string;
+  }): { success: boolean; message: string; user?: User } => {
+    const cleanName = data.name.trim();
+    const cleanPhone = data.phone.trim();
+    const phoneKey = normalizePhoneKey(cleanPhone);
+    const cleanEmail = (data.email || '').trim().toLowerCase();
+
+    if (cleanName.length < 2) {
+      return { success: false, message: 'Informe o nome completo do cliente.' };
+    }
+    if (phoneKey.length < 10) {
+      return {
+        success: false,
+        message: 'Informe um telefone/WhatsApp válido com DDD (ex: (92) 99999-9999).'
+      };
+    }
+    if (cleanEmail && !cleanEmail.includes('@')) {
+      return { success: false, message: 'O e-mail informado não é válido.' };
+    }
+
+    const existing = registeredUsers.find(
+      u => normalizePhoneKey(u.phone) === phoneKey
+    );
+
+    if (existing) {
+      const updatedUser: User = {
+        ...existing,
+        name: cleanName,
+        phone: cleanPhone,
+        email: cleanEmail || existing.email || `cliente.${phoneKey}@vasconcelos.local`,
+        phoneVerified: true
+      };
+      setRegisteredUsers(prev =>
+        prev.map(u => (u.id === existing.id ? updatedUser : u))
+      );
+      supabaseUpsert(SUPABASE_TABLES.customers, mapCustomerToRow(updatedUser), 'id');
+      return {
+        success: true,
+        message: `Cadastro de ${updatedUser.name} atualizado com sucesso!`,
+        user: updatedUser
+      };
+    }
+
+    const newUser: User = {
+      id: `usr-${Date.now()}`,
+      name: cleanName,
+      email: cleanEmail || `cliente.${phoneKey}@vasconcelos.local`,
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanName)}&background=db2777&color=fff&bold=true`,
+      phone: cleanPhone,
+      provider: 'email',
+      isAdmin: false,
+      phoneVerified: true,
+      addresses: []
+    };
+
+    setRegisteredUsers(prev => [newUser, ...prev]);
+    supabaseUpsert(SUPABASE_TABLES.customers, mapCustomerToRow(newUser), 'id');
+
+    return {
+      success: true,
+      message: `Cliente ${newUser.name} cadastrado com sucesso! Quando acessar com o telefone ${cleanPhone}, será reconhecido automaticamente.`,
+      user: newUser
+    };
+  };
+
+  const deleteCustomerByAdmin = (userId: string) => {
+    setRegisteredUsers(prev => prev.filter(u => u.id !== userId));
+    supabaseDelete(SUPABASE_TABLES.customers, `id=eq.${encodeURIComponent(userId)}`);
+  };
+
   const logout = () => {
     setCurrentUser(null);
   };
@@ -1004,7 +1162,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               }
             ]
           })
-        }).catch(() => {});
+        }).catch(() => { });
 
         const existingLogs = JSON.parse(localStorage.getItem('vsc_billing_logs') || '[]');
         const autoLog = {
@@ -1308,6 +1466,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         registeredUsers,
         loginWithSocial,
         loginWithEmail,
+        findCustomerByPhone,
+        loginWithPhone,
+        registerCustomerByAdmin,
+        deleteCustomerByAdmin,
         logout,
         updateUserProfile,
         addProduct,
