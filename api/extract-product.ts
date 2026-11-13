@@ -1,17 +1,17 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
-function parseHtmlMeta(html: string) {
+function parseHtmlMeta(html: string, sourceUrl = '') {
   const getMeta = (prop: string) => {
     const match =
       html.match(
         new RegExp(
-          `<meta[^>]*(?:property|name)=["']${prop}["'][^>]*content=["']([^"']*)["']`,
+          `<meta[^>]*(?:property|name|itemprop)=["']${prop}["'][^>]*content=["']([^"']*)["']`,
           'i'
         )
       ) ||
       html.match(
         new RegExp(
-          `<meta[^>]*content=["']([^"']*)["'][^>]*(?:property|name)=["']${prop}["']`,
+          `<meta[^>]*content=["']([^"']*)["'][^>]*(?:property|name|itemprop)=["']${prop}["']`,
           'i'
         )
       );
@@ -19,6 +19,50 @@ function parseHtmlMeta(html: string) {
   };
 
   const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
+
+  // Suporte dedicado para Amazon (productTitle, priceAmount, landingImage / images/I)
+  const isAmazon = /amazon\./i.test(sourceUrl);
+  let amazonTitle = '';
+  let amazonPrice: string | null = null;
+  let amazonImage = '';
+
+  if (isAmazon) {
+    const prodTitleMatch = html.match(
+      /<span[^>]*id=["']productTitle["'][^>]*>([\s\S]*?)<\/span>/i
+    );
+    if (prodTitleMatch) {
+      amazonTitle = prodTitleMatch[1].replace(/\s+/g, ' ').trim();
+    }
+
+    const priceAmountMatch = html.match(/"priceAmount"\s*:\s*([0-9]+(?:\.[0-9]+)?)/);
+    if (priceAmountMatch) {
+      amazonPrice = priceAmountMatch[1];
+    } else {
+      const wholeMatch = html.match(/<span[^>]*class=["'][^"']*a-price-whole[^"']*["'][^>]*>([\d.]+)/i);
+      const fracMatch = html.match(/<span[^>]*class=["'][^"']*a-price-fraction[^"']*["'][^>]*>(\d+)/i);
+      if (wholeMatch) {
+        const whole = wholeMatch[1].replace(/\./g, '');
+        const frac = fracMatch ? fracMatch[1] : '00';
+        amazonPrice = `${whole}.${frac}`;
+      }
+    }
+
+    const hiResMatch = html.match(/"hiRes"\s*:\s*"(https:\/\/[^"]+)"/);
+    const largeMatch = html.match(/"large"\s*:\s*"(https:\/\/[^"]+)"/);
+    const landingImgMatch =
+      html.match(/<img[^>]*id=["']landingImage["'][^>]*src=["'](https:\/\/[^"']+)["']/i) ||
+      html.match(/<img[^>]*src=["'](https:\/\/[^"']+)["'][^>]*id=["']landingImage["']/i);
+    const amazonCdnMatch = html.match(
+      /https:\/\/m\.media-amazon\.com\/images\/I\/[A-Za-z0-9+_-]+\.(?:jpg|jpeg|png|webp)/i
+    );
+
+    amazonImage =
+      hiResMatch?.[1] ||
+      largeMatch?.[1] ||
+      landingImgMatch?.[1] ||
+      amazonCdnMatch?.[0] ||
+      '';
+  }
 
   let jsonLdProduct: any = null;
   const ldJsonMatches = [
@@ -82,6 +126,7 @@ function parseHtmlMeta(html: string) {
 
   return {
     title:
+      amazonTitle ||
       jsonLdProduct?.name ||
       getMeta('og:title') ||
       (titleMatch ? titleMatch[1].trim() : ''),
@@ -91,11 +136,14 @@ function parseHtmlMeta(html: string) {
       getMeta('description') ||
       '',
     image:
+      amazonImage ||
       ldImage ||
       getMeta('og:image') ||
+      getMeta('twitter:image') ||
+      getMeta('image') ||
       (extractedImages.length > 0 ? extractedImages[0] : ''),
-    price: rawPrice,
-    images: extractedImages.slice(0, 4)
+    price: amazonPrice ?? rawPrice,
+    images: amazonImage ? [amazonImage, ...extractedImages].slice(0, 4) : extractedImages.slice(0, 4)
   };
 }
 
@@ -212,7 +260,7 @@ export default async function handler(req: any, res: any) {
 
       if (response.ok) {
         pageHtml = await response.text();
-        fetchedMeta = parseHtmlMeta(pageHtml);
+        fetchedMeta = parseHtmlMeta(pageHtml, cleanUrl);
       }
     } catch {
       // Site bloqueou fetch direto; segue para fallback inteligente
@@ -413,3 +461,4 @@ Campos obrigatórios:
     });
   }
 }
+
