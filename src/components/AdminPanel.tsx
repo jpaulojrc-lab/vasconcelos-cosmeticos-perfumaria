@@ -878,6 +878,43 @@ export const AdminPanel: React.FC = () => {
     }
   };
 
+  const handlePasteFromClipboardButton = async () => {
+    if (isExtractingImage) return;
+    if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+      setExtractFeedback({
+        type: 'error',
+        message:
+          'Seu navegador não suporta colar pelo botão. Toque e segure no campo "Toque e segure aqui para Colar" logo abaixo e toque em Colar, ou escolha a foto da galeria.'
+      });
+      return;
+    }
+
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      for (const item of clipboardItems) {
+        const imageType = item.types.find((t) => t.startsWith('image/'));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split('/')[1] || 'png';
+          const file = new File([blob], `colada.${ext}`, { type: imageType });
+          await handleExtractFromImage(file);
+          return;
+        }
+      }
+      setExtractFeedback({
+        type: 'error',
+        message:
+          'Nenhuma imagem encontrada na área de transferência. Copie a imagem primeiro ou escolha da galeria.'
+      });
+    } catch {
+      setExtractFeedback({
+        type: 'error',
+        message:
+          'Permissão para colar bloqueada. Toque e segure no campo "Toque e segure aqui para Colar" abaixo e selecione Colar, ou escolha da galeria.'
+      });
+    }
+  };
+
   // Extract product data from external link (WePink, etc.)
   const handleExtractFromUrl = async (customUrl?: string) => {
     const targetUrl = customUrl || importUrl;
@@ -3312,12 +3349,12 @@ export const AdminPanel: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Colar / Enviar Imagem Promocional (Ctrl+V) */}
+                {/* Colar / Enviar Imagem Promocional (PC e Smartphone) */}
                 <div className="pt-2 border-t border-pink-200/70 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[11px] font-bold text-pink-900 flex items-center gap-1.5">
                       <ClipboardPaste className="w-3.5 h-3.5 text-pink-600" />
-                      <span>Ou cole uma imagem de catálogo (Ctrl+V)</span>
+                      <span>Ou cole / envie uma imagem de catálogo</span>
                     </span>
 
                     <label className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-neutral-700 cursor-pointer select-none">
@@ -3331,43 +3368,69 @@ export const AdminPanel: React.FC = () => {
                     </label>
                   </div>
 
-                  <label
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const file = e.dataTransfer.files?.[0];
-                      if (file) handleExtractFromImage(file);
-                    }}
-                    className={`flex items-center justify-center gap-2.5 w-full rounded-xl border-2 border-dashed px-4 py-3 text-xs font-semibold transition cursor-pointer ${isExtractingImage
-                      ? 'border-pink-400 bg-pink-100/60 text-pink-900'
-                      : 'border-pink-300 bg-white/80 hover:bg-white text-neutral-700'
-                      }`}
-                  >
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
                       disabled={isExtractingImage}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
+                      onClick={handlePasteFromClipboardButton}
+                      className="flex items-center justify-center gap-2 w-full rounded-xl bg-gradient-to-r from-[#8B1E3F] to-pink-600 hover:from-neutral-900 hover:to-neutral-900 text-white px-3 py-2.5 text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50"
+                    >
+                      {isExtractingImage ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Lendo imagem...</span>
+                        </>
+                      ) : (
+                        <>
+                          <ClipboardPaste className="w-4 h-4 shrink-0" />
+                          <span>Colar Imagem Copiada</span>
+                        </>
+                      )}
+                    </button>
+
+                    <label
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const file = e.dataTransfer.files?.[0];
                         if (file) handleExtractFromImage(file);
-                        e.target.value = '';
                       }}
-                    />
-                    {isExtractingImage ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-pink-600" />
-                        <span>Lendo imagem e identificando nome, preço e foto...</span>
-                      </>
-                    ) : (
-                      <>
-                        <ImageIcon className="w-4 h-4 text-pink-600 shrink-0" />
-                        <span>
-                          Clique para escolher a imagem ou pressione <strong>Ctrl+V</strong> em qualquer lugar desta janela
-                        </span>
-                      </>
-                    )}
-                  </label>
+                      className={`flex items-center justify-center gap-2 w-full rounded-xl border-2 border-dashed px-3 py-2.5 text-xs font-semibold transition cursor-pointer ${isExtractingImage
+                        ? 'border-pink-400 bg-pink-100/60 text-pink-900'
+                        : 'border-pink-300 bg-white/80 hover:bg-white text-neutral-700'
+                        }`}
+                    >
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isExtractingImage}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleExtractFromImage(file);
+                          e.target.value = '';
+                        }}
+                      />
+                      <ImageIcon className="w-4 h-4 text-pink-600 shrink-0" />
+                      <span>Escolher da Galeria / Foto</span>
+                    </label>
+                  </div>
+
+                  <div
+                    contentEditable={!isExtractingImage}
+                    suppressContentEditableWarning
+                    role="textbox"
+                    aria-label="Área para colar imagem no celular"
+                    onPaste={(e) => {
+                      handleModalImagePaste(e);
+                      e.currentTarget.innerHTML = '';
+                    }}
+                    onInput={(e) => {
+                      e.currentTarget.innerHTML = '';
+                    }}
+                    data-placeholder="📱 No celular: toque e segure aqui → Colar (ou Ctrl+V no PC)"
+                    className="w-full rounded-xl border border-pink-200 bg-white/90 px-3 py-2 text-[11px] text-neutral-500 text-center focus:outline-hidden focus:ring-2 focus:ring-pink-400 empty:before:content-[attr(data-placeholder)] empty:before:text-neutral-400 cursor-text select-none"
+                  />
                 </div>
 
                 {/* Feedback da extração */}
