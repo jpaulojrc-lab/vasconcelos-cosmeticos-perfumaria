@@ -99,7 +99,7 @@ export const AdminPanel: React.FC = () => {
     setCondDueDate(order.adminFirstDueDate || 'Conforme combinado');
     setCondNotes(
       order.adminPaymentTerms ||
-        'Entrega exclusiva via VasconcelosExpress sem custos adicionais (Frete Grátis).'
+      'Entrega exclusiva via VasconcelosExpress sem custos adicionais (Frete Grátis).'
     );
     const existingReceipts = order.paymentReceipts || [];
     setCondReceipts(existingReceipts);
@@ -720,9 +720,18 @@ export const AdminPanel: React.FC = () => {
         body: JSON.stringify({ url: targetUrl.trim() })
       });
 
-      const json = await res.json();
-      if (!res.ok || !json.success || !json.data) {
-        throw new Error(json.error || 'Não foi possível extrair dados do link.');
+      const rawText = await res.text();
+      let json: any = null;
+      try {
+        json = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        throw new Error(
+          'O servidor não respondeu em formato válido. Preencha os campos abaixo manualmente ou tente outro link.'
+        );
+      }
+
+      if (!res.ok || !json?.success || !json?.data) {
+        throw new Error(json?.error || 'Não foi possível extrair dados do link.');
       }
 
       const p = json.data;
@@ -1061,15 +1070,15 @@ export const AdminPanel: React.FC = () => {
     const updatedReceipts: PaymentReceipt[] =
       missing > 0.01
         ? [
-            ...f.receipts,
-            {
-              id: `rec-${Date.now()}`,
-              date: todayIso,
-              amount: missing,
-              method: 'PIX',
-              note: 'Quitação rápida (1 clique ADM)'
-            }
-          ]
+          ...f.receipts,
+          {
+            id: `rec-${Date.now()}`,
+            date: todayIso,
+            amount: missing,
+            method: 'PIX',
+            note: 'Quitação rápida (1 clique ADM)'
+          }
+        ]
         : f.receipts;
 
     updateOrderPaymentConditions(f.order.id, {
@@ -1106,8 +1115,8 @@ export const AdminPanel: React.FC = () => {
     const receiptsLines =
       f.receipts.length > 0
         ? f.receipts
-            .map((r) => `• 📅 ${formatReceiptDateBr(r.date)}: *${formatBRL(r.amount)}*`)
-            .join('\n')
+          .map((r) => `• 📅 ${formatReceiptDateBr(r.date)}: *${formatBRL(r.amount)}*`)
+          .join('\n')
         : f.receivedGross > 0
           ? `• ✅ Pago anteriormente: *${formatBRL(f.receivedGross)}*`
           : '• Nenhum valor registrado ainda';
@@ -1335,8 +1344,8 @@ export const AdminPanel: React.FC = () => {
           <button
             onClick={() => setActiveTab('relatorios')}
             className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'relatorios'
-                ? 'border-white text-white'
-                : 'border-transparent text-neutral-400 hover:text-white'
+              ? 'border-white text-white'
+              : 'border-transparent text-neutral-400 hover:text-white'
               }`}
           >
             <DollarSign className="w-4 h-4" />
@@ -1346,8 +1355,8 @@ export const AdminPanel: React.FC = () => {
           <button
             onClick={() => setActiveTab('estoque')}
             className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'estoque'
-                ? 'border-white text-white'
-                : 'border-transparent text-neutral-400 hover:text-white'
+              ? 'border-white text-white'
+              : 'border-transparent text-neutral-400 hover:text-white'
               }`}
           >
             <Package className="w-4 h-4" />
@@ -1357,8 +1366,8 @@ export const AdminPanel: React.FC = () => {
           <button
             onClick={() => setActiveTab('cupons')}
             className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'cupons'
-                ? 'border-white text-white'
-                : 'border-transparent text-neutral-400 hover:text-white'
+              ? 'border-white text-white'
+              : 'border-transparent text-neutral-400 hover:text-white'
               }`}
           >
             <Tag className="w-4 h-4" />
@@ -1368,8 +1377,8 @@ export const AdminPanel: React.FC = () => {
           <button
             onClick={() => setActiveTab('cobranca')}
             className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'cobranca'
-                ? 'border-white text-white'
-                : 'border-transparent text-neutral-400 hover:text-white'
+              ? 'border-white text-white'
+              : 'border-transparent text-neutral-400 hover:text-white'
               }`}
           >
             <MessageCircle className="w-4 h-4" />
@@ -1494,11 +1503,10 @@ export const AdminPanel: React.FC = () => {
                         key={tab.id}
                         type="button"
                         onClick={() => setFinanceFilter(tab.id as any)}
-                        className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition cursor-pointer ${
-                          financeFilter === tab.id
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold whitespace-nowrap transition cursor-pointer ${financeFilter === tab.id
                             ? 'bg-neutral-950 text-white shadow-xs'
                             : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-                        }`}
+                          }`}
                       >
                         {tab.label}
                       </button>
@@ -1569,22 +1577,20 @@ export const AdminPanel: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => updateOrderStatus(f.order.id, 'pendente')}
-                              className={`px-2 py-1 rounded-md text-[10px] font-extrabold transition cursor-pointer ${
-                                !isEntregue
+                              className={`px-2 py-1 rounded-md text-[10px] font-extrabold transition cursor-pointer ${!isEntregue
                                   ? 'bg-amber-400 text-neutral-950'
                                   : 'text-neutral-500'
-                              }`}
+                                }`}
                             >
                               ⏳ Aguard.
                             </button>
                             <button
                               type="button"
                               onClick={() => updateOrderStatus(f.order.id, 'entregue')}
-                              className={`px-2 py-1 rounded-md text-[10px] font-extrabold transition cursor-pointer ${
-                                isEntregue
+                              className={`px-2 py-1 rounded-md text-[10px] font-extrabold transition cursor-pointer ${isEntregue
                                   ? 'bg-emerald-600 text-white'
                                   : 'text-neutral-500'
-                              }`}
+                                }`}
                             >
                               ✅ Entregue
                             </button>
@@ -1626,23 +1632,20 @@ export const AdminPanel: React.FC = () => {
                           </div>
 
                           <div
-                            className={`p-1.5 rounded-lg border ${
-                              isQuitado
+                            className={`p-1.5 rounded-lg border ${isQuitado
                                 ? 'bg-emerald-100 border-emerald-300'
                                 : 'bg-amber-50 border-amber-300'
-                            }`}
+                              }`}
                           >
                             <span
-                              className={`text-[8px] font-extrabold uppercase block ${
-                                isQuitado ? 'text-emerald-900' : 'text-amber-950'
-                              }`}
+                              className={`text-[8px] font-extrabold uppercase block ${isQuitado ? 'text-emerald-900' : 'text-amber-950'
+                                }`}
                             >
                               Saldo Restante
                             </span>
                             <p
-                              className={`text-xs font-black ${
-                                isQuitado ? 'text-emerald-800' : 'text-[#8B1E3F]'
-                              }`}
+                              className={`text-xs font-black ${isQuitado ? 'text-emerald-800' : 'text-[#8B1E3F]'
+                                }`}
                             >
                               {isQuitado ? 'Pago ✅' : formatBRL(f.remainingBalance)}
                             </p>
@@ -1887,9 +1890,8 @@ export const AdminPanel: React.FC = () => {
                                 {/* Barra simples de progresso */}
                                 <div className="w-full bg-neutral-200 h-1.5 rounded-full overflow-hidden">
                                   <div
-                                    className={`h-full rounded-full transition-all ${
-                                      isFullySettled ? 'bg-emerald-600' : 'bg-[#8B1E3F]'
-                                    }`}
+                                    className={`h-full rounded-full transition-all ${isFullySettled ? 'bg-emerald-600' : 'bg-[#8B1E3F]'
+                                      }`}
                                     style={{ width: `${paidPercentage}%` }}
                                   />
                                 </div>
@@ -1902,11 +1904,10 @@ export const AdminPanel: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => updateOrderStatus(f.order.id, 'pendente')}
-                                  className={`px-1.5 py-1.5 rounded-md text-[10px] font-extrabold transition cursor-pointer flex items-center justify-center gap-0.5 ${
-                                    !isEntregue
+                                  className={`px-1.5 py-1.5 rounded-md text-[10px] font-extrabold transition cursor-pointer flex items-center justify-center gap-0.5 ${!isEntregue
                                       ? 'bg-amber-400 text-neutral-950 shadow-2xs'
                                       : 'text-neutral-500 hover:text-neutral-900'
-                                  }`}
+                                    }`}
                                   title="Marcar como Aguardando Entrega"
                                 >
                                   <span>⏳ Aguard.</span>
@@ -1914,11 +1915,10 @@ export const AdminPanel: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => updateOrderStatus(f.order.id, 'entregue')}
-                                  className={`px-1.5 py-1.5 rounded-md text-[10px] font-extrabold transition cursor-pointer flex items-center justify-center gap-0.5 ${
-                                    isEntregue
+                                  className={`px-1.5 py-1.5 rounded-md text-[10px] font-extrabold transition cursor-pointer flex items-center justify-center gap-0.5 ${isEntregue
                                       ? 'bg-emerald-600 text-white shadow-2xs'
                                       : 'text-neutral-500 hover:text-neutral-900'
-                                  }`}
+                                    }`}
                                   title="Marcar como Entregue ao cliente"
                                 >
                                   <span>✅ Entregue</span>
@@ -2304,8 +2304,8 @@ export const AdminPanel: React.FC = () => {
             {couponFeedback && (
               <div
                 className={`p-4 rounded-2xl border text-xs flex flex-col gap-2 animate-in fade-in ${couponFeedback.type === 'success'
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-900'
                   }`}
               >
                 <div className="flex items-center justify-between">
@@ -2499,8 +2499,8 @@ export const AdminPanel: React.FC = () => {
                       </h4>
                       <span
                         className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${autoConfig.enabled
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-neutral-800 text-neutral-400'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-neutral-800 text-neutral-400'
                           }`}
                       >
                         {autoConfig.enabled ? 'Ativa 24h' : 'Pausada'}
@@ -2692,8 +2692,8 @@ export const AdminPanel: React.FC = () => {
             {billingFeedback && (
               <div
                 className={`p-4 rounded-2xl border text-xs flex items-center justify-between animate-in fade-in ${billingFeedback.type === 'success'
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-900'
                   }`}
               >
                 <div className="flex items-center gap-2 font-bold">
@@ -2759,8 +2759,8 @@ export const AdminPanel: React.FC = () => {
                           type="button"
                           onClick={() => handleSelectBillingCustomer(item)}
                           className={`w-full text-left p-3.5 rounded-2xl transition flex items-start justify-between gap-2 cursor-pointer ${isSelected
-                              ? 'bg-pink-50/90 border border-pink-200'
-                              : 'hover:bg-neutral-50'
+                            ? 'bg-pink-50/90 border border-pink-200'
+                            : 'hover:bg-neutral-50'
                             }`}
                         >
                           <div className="space-y-1 min-w-0">
@@ -2832,8 +2832,8 @@ export const AdminPanel: React.FC = () => {
                         type="button"
                         onClick={() => handleApplyTemplate(t.id as 'lembrete' | 'pix' | 'vencimento')}
                         className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${billTemplate === t.id
-                            ? 'bg-pink-600 text-white'
-                            : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                          ? 'bg-pink-600 text-white'
+                          : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                           }`}
                       >
                         {t.label}
@@ -3053,8 +3053,8 @@ export const AdminPanel: React.FC = () => {
                           <td className="py-2.5 px-3">
                             <span
                               className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${log.channel === 'whatsapp'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-pink-100 text-pink-800'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-pink-100 text-pink-800'
                                 }`}
                             >
                               {log.channel === 'whatsapp' ? 'WhatsApp' : 'E-mail'}
@@ -3169,8 +3169,8 @@ export const AdminPanel: React.FC = () => {
                 {extractFeedback && (
                   <div
                     className={`flex items-start gap-2 p-3 rounded-xl text-xs ${extractFeedback.type === 'success'
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                        : 'bg-rose-50 text-rose-800 border border-rose-200'
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-800 border border-rose-200'
                       }`}
                   >
                     {extractFeedback.type === 'success' ? (
@@ -3628,23 +3628,20 @@ export const AdminPanel: React.FC = () => {
                 </div>
 
                 <div
-                  className={`p-3 rounded-2xl border-2 ${
-                    isPreviewPaid
+                  className={`p-3 rounded-2xl border-2 ${isPreviewPaid
                       ? 'bg-emerald-50 border-emerald-500'
                       : 'bg-amber-50 border-amber-400'
-                  }`}
+                    }`}
                 >
                   <span
-                    className={`text-[10px] font-bold uppercase block ${
-                      isPreviewPaid ? 'text-emerald-800' : 'text-amber-900'
-                    }`}
+                    className={`text-[10px] font-bold uppercase block ${isPreviewPaid ? 'text-emerald-800' : 'text-amber-900'
+                      }`}
                   >
                     Saldo Restante
                   </span>
                   <p
-                    className={`text-sm sm:text-base font-extrabold mt-1 ${
-                      isPreviewPaid ? 'text-emerald-700' : 'text-[#8B1E3F]'
-                    }`}
+                    className={`text-sm sm:text-base font-extrabold mt-1 ${isPreviewPaid ? 'text-emerald-700' : 'text-[#8B1E3F]'
+                      }`}
                   >
                     {isPreviewPaid ? 'QUITADO ✅' : formatBRL(previewRemainingBalance)}
                   </p>
@@ -3841,11 +3838,11 @@ export const AdminPanel: React.FC = () => {
                       const receiptsLines =
                         finalReceipts.length > 0
                           ? finalReceipts
-                              .map(
-                                (r) =>
-                                  `• ${formatReceiptDateBr(r.date)}: *${formatBRL(r.amount)}* (${r.method || 'PIX'})`
-                              )
-                              .join('\n')
+                            .map(
+                              (r) =>
+                                `• ${formatReceiptDateBr(r.date)}: *${formatBRL(r.amount)}* (${r.method || 'PIX'})`
+                            )
+                            .join('\n')
                           : '• Nenhum pagamento registrado ainda';
 
                       const digits = (conditionModalOrder.customer.phone || '').replace(/\D/g, '');
@@ -3939,9 +3936,8 @@ export const AdminPanel: React.FC = () => {
             setActiveTab('relatorios');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${
-            activeTab === 'relatorios' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
-          }`}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${activeTab === 'relatorios' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
+            }`}
         >
           <DollarSign className="w-5 h-5" />
           <span className="text-[10px]">Pedidos & Saldo</span>
@@ -3953,9 +3949,8 @@ export const AdminPanel: React.FC = () => {
             setActiveTab('estoque');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${
-            activeTab === 'estoque' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
-          }`}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${activeTab === 'estoque' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
+            }`}
         >
           <Package className="w-5 h-5" />
           <span className="text-[10px]">Estoque</span>
@@ -3967,9 +3962,8 @@ export const AdminPanel: React.FC = () => {
             setActiveTab('cupons');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${
-            activeTab === 'cupons' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
-          }`}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${activeTab === 'cupons' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
+            }`}
         >
           <Tag className="w-5 h-5" />
           <span className="text-[10px]">Cupons</span>
@@ -3981,9 +3975,8 @@ export const AdminPanel: React.FC = () => {
             setActiveTab('cobranca');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${
-            activeTab === 'cobranca' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
-          }`}
+          className={`flex flex-col items-center gap-1 px-2 py-1 rounded-lg transition cursor-pointer ${activeTab === 'cobranca' ? 'text-emerald-400 font-extrabold' : 'text-neutral-400'
+            }`}
         >
           <MessageCircle className="w-5 h-5" />
           <span className="text-[10px]">Cobrança</span>
