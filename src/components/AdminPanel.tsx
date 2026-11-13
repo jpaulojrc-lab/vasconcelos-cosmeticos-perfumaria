@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  TrendingUp,
   Package,
   ShoppingBag,
   DollarSign,
@@ -11,7 +10,6 @@ import {
   CheckCircle,
   Clock,
   Truck,
-  ArrowUpRight,
   Search,
   SlidersHorizontal,
   AlertTriangle,
@@ -405,6 +403,23 @@ export const AdminPanel: React.FC = () => {
     const saved = localStorage.getItem('vsc_billing_logs');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Remove automaticamente do histórico local cobranças de pedidos que já foram apagados do banco
+  useEffect(() => {
+    if (!supabaseConnected && orders.length === 0) return;
+    setBillingLogs((prev) => {
+      const filtered = prev.filter((log) => {
+        const ref = (log.orderNumber || '').trim();
+        if (!ref.startsWith('VSC-')) return true;
+        const orderCode = ref.split(/\s+/)[0];
+        return orders.some((o) => o.orderNumber === orderCode);
+      });
+      if (filtered.length !== prev.length) {
+        localStorage.setItem('vsc_billing_logs', JSON.stringify(filtered));
+      }
+      return filtered;
+    });
+  }, [orders, supabaseConnected]);
 
   const generateBillingText = (
     tpl: 'lembrete' | 'pix' | 'vencimento',
@@ -916,28 +931,6 @@ export const AdminPanel: React.FC = () => {
 
     setIsProductModalOpen(false);
   };
-
-  // Monthly Sales Reports Data
-  const monthlySales = [
-    { month: 'Jan 2026', revenue: 78500, orders: 340, growth: '+12%' },
-    { month: 'Fev 2026', revenue: 92400, orders: 410, growth: '+18%' },
-    { month: 'Mar 2026', revenue: 108900, orders: 480, growth: '+17%' },
-    { month: 'Abr 2026', revenue: 114200, orders: 512, growth: '+5%' },
-    { month: 'Mai 2026', revenue: 132000, orders: 590, growth: '+15%' },
-    { month: 'Jun 2026', revenue: 128400, orders: 570, growth: '-2%' },
-    { month: 'Jul 2026', revenue: 139800, orders: 620, growth: '+9%' },
-    { month: 'Ago 2026', revenue: 144500, orders: 640, growth: '+3%' },
-    { month: 'Set 2026', revenue: 156300, orders: 690, growth: '+8%' },
-    { month: 'Out 2026', revenue: 168920, orders: 745, growth: '+14%' }
-  ];
-
-  const maxRevenue = Math.max(...monthlySales.map(m => m.revenue));
-
-  // Calculated metrics
-  const totalStoreRevenue = orders.reduce((sum, o) => sum + (o.paymentStatus === 'paid' ? o.total : 0), 168920);
-  const totalOrdersCount = orders.length + 745;
-  const lowStockCount = products.filter(p => p.stock < 25).length;
-  const averageTicket = totalStoreRevenue / totalOrdersCount;
 
   // ============================================================================
   // CONTROLE FINANCEIRO: VENDAS À VISTA vs. PARCELADO (FLUXO DE CAIXA & RECEBÍVEIS)
@@ -2034,155 +2027,6 @@ export const AdminPanel: React.FC = () => {
                 </div>
               </div>
             </div>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-
-              <div className="bg-white p-6 rounded-3xl border border-neutral-200/80 shadow-xs">
-                <div className="flex items-center justify-between text-neutral-500 text-xs font-semibold mb-2">
-                  <span>Receita Total do Mês</span>
-                  <div className="p-2 rounded-xl bg-pink-50 text-pink-600">
-                    <DollarSign className="w-4 h-4" />
-                  </div>
-                </div>
-                <p className="text-2xl font-black text-neutral-900 font-display">
-                  {formatBRL(totalStoreRevenue)}
-                </p>
-                <div className="mt-2 flex items-center text-xs text-emerald-600 font-bold">
-                  <ArrowUpRight className="w-4 h-4" />
-                  <span>+14.2% em relação a Setembro</span>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-3xl border border-neutral-200/80 shadow-xs">
-                <div className="flex items-center justify-between text-neutral-500 text-xs font-semibold mb-2">
-                  <span>Total de Pedidos</span>
-                  <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
-                    <ShoppingBag className="w-4 h-4" />
-                  </div>
-                </div>
-                <p className="text-2xl font-black text-neutral-900 font-display">
-                  {totalOrdersCount}
-                </p>
-                <div className="mt-2 flex items-center text-xs text-emerald-600 font-bold">
-                  <ArrowUpRight className="w-4 h-4" />
-                  <span>98% de satisfação dos clientes</span>
-                </div>
-              </div>
-
-              <div className="bg-white p-6 rounded-3xl border border-neutral-200/80 shadow-xs">
-                <div className="flex items-center justify-between text-neutral-500 text-xs font-semibold mb-2">
-                  <span>Ticket Médio</span>
-                  <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                </div>
-                <p className="text-2xl font-black text-neutral-900 font-display">
-                  {formatBRL(averageTicket)}
-                </p>
-                <p className="mt-2 text-xs text-neutral-400">Impulsionado por Kits & Combos</p>
-              </div>
-
-              <div className="bg-white p-6 rounded-3xl border border-neutral-200/80 shadow-xs">
-                <div className="flex items-center justify-between text-neutral-500 text-xs font-semibold mb-2">
-                  <span>Alerta de Reposição</span>
-                  <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-                    <AlertTriangle className="w-4 h-4" />
-                  </div>
-                </div>
-                <p className="text-2xl font-black text-neutral-900 font-display">
-                  {lowStockCount} produtos
-                </p>
-                <p className="mt-2 text-xs text-amber-700 font-semibold">Estoque baixo (&lt; 25 unidades)</p>
-              </div>
-            </div>
-
-            {/* Monthly Sales Bar Graph */}
-            <div className="bg-white p-6 sm:p-8 rounded-3xl border border-neutral-200/80 shadow-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-neutral-100 gap-2">
-                <div>
-                  <h3 className="text-lg font-black text-neutral-900 font-display">
-                    Relatório Detalhado de Vendas Mensais (2026)
-                  </h3>
-                  <p className="text-xs text-neutral-500">
-                    Desempenho financeiro consolidado de faturamento e volume de pedidos
-                  </p>
-                </div>
-                <span className="text-xs font-bold text-pink-600 bg-pink-50 px-3 py-1 rounded-full border border-pink-200">
-                  Faturamento Anual Acumulado: R$ 1.258.020,00
-                </span>
-              </div>
-
-              {/* Interactive Bar Chart Visualization */}
-              <div className="mt-8 space-y-4">
-                <div className="grid grid-cols-5 sm:grid-cols-10 gap-3 items-end h-64 pt-6">
-                  {monthlySales.map((m, idx) => {
-                    const heightPercent = Math.round((m.revenue / maxRevenue) * 100);
-                    return (
-                      <div key={idx} className="flex flex-col items-center h-full justify-end group relative">
-                        {/* Tooltip on hover */}
-                        <div className="absolute -top-12 opacity-0 group-hover:opacity-100 transition duration-200 bg-neutral-900 text-white text-[10px] p-2 rounded-xl shadow-lg whitespace-nowrap pointer-events-none z-10 text-center">
-                          <p className="font-bold">{formatBRL(m.revenue)}</p>
-                          <p className="text-neutral-400">{m.orders} pedidos ({m.growth})</p>
-                        </div>
-
-                        {/* Bar */}
-                        <div
-                          className="w-full max-w-[36px] bg-neutral-200 group-hover:bg-gradient-to-t group-hover:from-pink-600 group-hover:to-rose-400 rounded-t-xl transition-all duration-300 relative"
-                          style={{
-                            height: `${heightPercent}%`,
-                            background: idx === monthlySales.length - 1
-                              ? 'linear-gradient(to top, #E91E63, #FF4081)'
-                              : undefined
-                          }}
-                        >
-                          {idx === monthlySales.length - 1 && (
-                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[9px] font-bold text-pink-600 bg-pink-50 px-1 rounded">
-                              Atual
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Month Label */}
-                        <span className="text-[10px] font-bold text-neutral-500 mt-2 truncate w-full text-center">
-                          {m.month.split(' ')[0]}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Table of Monthly Metrics */}
-              <div className="mt-8 overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-neutral-50 text-neutral-500 font-bold uppercase tracking-wider border-y border-neutral-200">
-                    <tr>
-                      <th className="py-3 px-4">Mês</th>
-                      <th className="py-3 px-4">Faturamento</th>
-                      <th className="py-3 px-4">Pedidos Concluídos</th>
-                      <th className="py-3 px-4">Crescimento MoM</th>
-                      <th className="py-3 px-4">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-100">
-                    {monthlySales.slice(-5).map((m, idx) => (
-                      <tr key={idx} className="hover:bg-neutral-50">
-                        <td className="py-3 px-4 font-bold text-neutral-900">{m.month}</td>
-                        <td className="py-3 px-4 font-extrabold text-neutral-900">{formatBRL(m.revenue)}</td>
-                        <td className="py-3 px-4 text-neutral-700">{m.orders} pedidos</td>
-                        <td className="py-3 px-4 font-semibold text-emerald-600">{m.growth}</td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            Consolidado
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           </div>
         )}
 
@@ -3060,10 +2904,23 @@ export const AdminPanel: React.FC = () => {
             {/* Histórico de Cobranças Enviadas */}
             {billingLogs.length > 0 && (
               <div className="bg-white rounded-3xl border border-neutral-200 p-5 shadow-xs space-y-3">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-neutral-700 flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-pink-600" />
-                  <span>Histórico Recente de Cobranças Enviadas ({billingLogs.length})</span>
-                </h4>
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-neutral-700 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-pink-600" />
+                    <span>Histórico Recente de Cobranças Enviadas ({billingLogs.length})</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBillingLogs([]);
+                      localStorage.removeItem('vsc_billing_logs');
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-lg transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Limpar Histórico</span>
+                  </button>
+                </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
