@@ -1,0 +1,23 @@
+{
+  "name": "VASCONCELOS Perfumaria & Cosméticos",
+  "short_name": "VASCONCELOS",
+  "description": "Alta Perfumaria, Skincare, Maquiagem & Presentes Exclusivos.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
