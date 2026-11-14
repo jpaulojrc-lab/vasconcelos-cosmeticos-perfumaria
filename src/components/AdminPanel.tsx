@@ -35,8 +35,15 @@ import {
   FileSpreadsheet,
   Image as ImageIcon,
   ClipboardPaste,
-  Star
+  Star,
+  Fingerprint
 } from 'lucide-react';
+import {
+  clearAdminBiometric,
+  getStoredAdminBiometric,
+  isBiometricSupported,
+  registerAdminBiometric
+} from '../utils/adminBiometrics';
 import { useStore } from '../context/StoreContext';
 import { Product, ProductCategory, Order, OrderStatus, Coupon, PaymentReceipt } from '../types';
 import { formatBRL, formatDate } from '../utils/formatters';
@@ -391,6 +398,15 @@ export const AdminPanel: React.FC = () => {
   const [formBenefitsText, setFormBenefitsText] = useState('');
   const [formActivesText, setFormActivesText] = useState('');
   const [formIsBestSeller, setFormIsBestSeller] = useState(false);
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [hasBiometric, setHasBiometric] = useState(() => Boolean(getStoredAdminBiometric()));
+
+  useEffect(() => {
+    isBiometricSupported().then((supported) => {
+      setBiometricSupported(supported);
+      setHasBiometric(Boolean(getStoredAdminBiometric()));
+    });
+  }, []);
 
   // Tracking Code edit state for order
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -1765,6 +1781,35 @@ export const AdminPanel: React.FC = () => {
               <ExternalLink className="w-3.5 h-3.5" />
               <span>Ver Loja ao Vivo</span>
             </button>
+
+            {biometricSupported && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (hasBiometric) {
+                    if (confirm('A biometria já está ativa neste aparelho. Deseja remover a biometria salva?')) {
+                      clearAdminBiometric();
+                      setHasBiometric(false);
+                    }
+                    return;
+                  }
+                  const res = await registerAdminBiometric('sandravasconcellossillva@gmail.com');
+                  if (res.ok) {
+                    setHasBiometric(true);
+                  }
+                  alert(res.message);
+                }}
+                className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                  hasBiometric
+                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/40'
+                    : 'bg-white/10 hover:bg-white/20 text-white border-white/20'
+                }`}
+                title={hasBiometric ? 'Biometria salva neste aparelho (clique para gerenciar)' : 'Salvar acesso na biometria deste aparelho'}
+              >
+                <Fingerprint className="w-3.5 h-3.5" />
+                <span>{hasBiometric ? 'Biometria Ativa' : 'Ativar Biometria'}</span>
+              </button>
+            )}
 
             <button
               onClick={adminLogout}

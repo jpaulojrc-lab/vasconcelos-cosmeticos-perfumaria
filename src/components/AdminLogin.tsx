@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   Lock,
@@ -10,37 +10,92 @@ import {
   ArrowLeft,
   CheckCircle2,
   Send,
-  Loader2
+  Loader2,
+  Fingerprint
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import {
+  authenticateWithAdminBiometric,
+  clearAdminBiometric,
+  getSavedAdminEmail,
+  getStoredAdminBiometric,
+  isBiometricSupported,
+  registerAdminBiometric
+} from '../utils/adminBiometrics';
 
 const ADMIN_RECOVERY_EMAIL = 'sandravasconcellossillva@gmail.com';
 
 export const AdminLogin: React.FC = () => {
-  const { adminLogin, setViewMode } = useStore();
-  const [email, setEmail] = useState('');
+  const { adminLogin, adminLoginWithBiometrics, setViewMode } = useStore();
+  const [email, setEmail] = useState(() => getSavedAdminEmail());
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true);
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [hasBiometric, setHasBiometric] = useState(() => Boolean(getStoredAdminBiometric()));
+  const [saveBiometric, setSaveBiometric] = useState(true);
+  const [biometricLoading, setBiometricLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    isBiometricSupported().then((supported) => {
+      setBiometricSupported(supported);
+      setHasBiometric(Boolean(getStoredAdminBiometric()));
+    });
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setBiometricLoading(true);
+    try {
+      const res = await authenticateWithAdminBiometric();
+      if (res.ok) {
+        const loginRes = adminLoginWithBiometrics(rememberDevice);
+        setSuccessMsg(loginRes.message);
+      } else {
+        setErrorMsg(res.message);
+      }
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
     setLoading(true);
 
-    setTimeout(() => {
-      const res = adminLogin(email, password);
+    try {
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanPass = password.trim();
+
+      if (
+        cleanEmail === ADMIN_RECOVERY_EMAIL &&
+        cleanPass === 'S23086072' &&
+        biometricSupported &&
+        saveBiometric &&
+        !hasBiometric
+      ) {
+        const bioRes = await registerAdminBiometric(cleanEmail);
+        if (bioRes.ok) {
+          setHasBiometric(true);
+        }
+      }
+
+      const res = adminLogin(email, password, rememberDevice);
       if (res.success) {
         setSuccessMsg(res.message);
       } else {
         setErrorMsg(res.message);
       }
+    } finally {
       setLoading(false);
-    }, 300);
+    }
   };
 
   const handleRecoverCredentials = async () => {
@@ -75,7 +130,7 @@ export const AdminLogin: React.FC = () => {
           body: JSON.stringify({
             _subject: 'Recuperação de Acesso Administrativo — VASCONCELOS',
             _template: 'table',
-            Sistema: 'Portal Administrativo — VASCONCELOS Cosméticos & Perfumaria',
+            Sistema: 'Portal Administrativo — VASCONCELOS Utensílios e Presentes',
             Login_E_mail: ADMIN_RECOVERY_EMAIL,
             Senha_de_Acesso: 'S23086072',
             Mensagem: 'Você solicitou o envio das suas credenciais de acesso ao Painel Administrativo.'
@@ -141,17 +196,70 @@ export const AdminLogin: React.FC = () => {
           </div>
         )}
 
+        {/* Biometric Quick Sign-In (when already saved on this PC, Notebook, or Smartphone) */}
+        {biometricSupported && hasBiometric && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleBiometricLogin}
+              disabled={biometricLoading}
+              className="w-full py-3.5 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs uppercase tracking-[0.12em] transition flex items-center justify-center gap-2.5 shadow-sm disabled:opacity-50 cursor-pointer"
+            >
+              {biometricLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Verificando Biometria...</span>
+                </>
+              ) : (
+                <>
+                  <Fingerprint className="w-5 h-5" />
+                  <span>Entrar com Biometria do Aparelho</span>
+                </>
+              )}
+            </button>
+            <div className="flex items-center justify-between text-[11px] text-neutral-500 px-1">
+              <span>Digital, Face ID ou Windows Hello</span>
+              <button
+                type="button"
+                onClick={() => {
+                  clearAdminBiometric();
+                  setHasBiometric(false);
+                  setSuccessMsg('Biometria removida deste aparelho.');
+                }}
+                className="text-neutral-400 hover:text-red-600 underline cursor-pointer"
+              >
+                Remover biometria
+              </button>
+            </div>
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-neutral-200" />
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase tracking-widest">
+                <span className="bg-white px-3 text-neutral-400 font-semibold">ou entre com senha</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Login Form */}
-        <form onSubmit={handleLogin} autoComplete="off" className="space-y-4">
+        <form id="admin-login-form" onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+            <label
+              htmlFor="admin-email"
+              className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider"
+            >
               E-mail Administrativo
             </label>
             <div className="relative mt-1">
               <input
+                id="admin-email"
+                name="username"
                 type="email"
                 required
-                autoComplete="off"
+                autoComplete="username webauthn"
+                spellCheck={false}
+                enterKeyHint="next"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Digite seu e-mail administrativo"
@@ -163,7 +271,10 @@ export const AdminLogin: React.FC = () => {
 
           <div>
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider">
+              <label
+                htmlFor="admin-password"
+                className="text-[11px] font-bold text-neutral-700 uppercase tracking-wider"
+              >
                 Senha de Acesso
               </label>
               <button
@@ -187,9 +298,12 @@ export const AdminLogin: React.FC = () => {
             </div>
             <div className="relative mt-1">
               <input
+                id="admin-password"
+                name="password"
                 type={showPassword ? 'text' : 'password'}
                 required
-                autoComplete="new-password"
+                autoComplete="current-password"
+                enterKeyHint="done"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -199,11 +313,39 @@ export const AdminLogin: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                 className="absolute right-3.5 top-3 text-neutral-400 hover:text-neutral-800 cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+          </div>
+
+          {/* Remember Device & Save Biometrics Options */}
+          <div className="space-y-2 pt-1">
+            <label className="flex items-center gap-2 text-xs text-neutral-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rememberDevice}
+                onChange={(e) => setRememberDevice(e.target.checked)}
+                className="w-4 h-4 accent-[#111111] rounded"
+              />
+              <span>Lembrar acesso neste aparelho</span>
+            </label>
+
+            {biometricSupported && !hasBiometric && (
+              <label className="flex items-start gap-2 text-xs text-neutral-700 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={saveBiometric}
+                  onChange={(e) => setSaveBiometric(e.target.checked)}
+                  className="w-4 h-4 accent-emerald-700 rounded mt-0.5 shrink-0"
+                />
+                <span>
+                  Salvar na <strong className="text-neutral-900">biometria do aparelho</strong> (Digital, Face ID ou Windows Hello)
+                </span>
+              </label>
+            )}
           </div>
 
           <button

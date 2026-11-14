@@ -138,7 +138,8 @@ interface StoreContextType {
 
   // Admin Authentication
   isAdminAuthenticated: boolean;
-  adminLogin: (email: string, pass: string) => { success: boolean; message: string };
+  adminLogin: (email: string, pass: string, rememberDevice?: boolean) => { success: boolean; message: string };
+  adminLoginWithBiometrics: (rememberDevice?: boolean) => { success: boolean; message: string };
   adminLogout: () => void;
 
   // Supabase Cloud Integration
@@ -218,7 +219,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Admin Authentication State
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
-    return sessionStorage.getItem('vsc_admin_auth') === 'true';
+    return (
+      sessionStorage.getItem('vsc_admin_auth') === 'true' ||
+      localStorage.getItem('vsc_admin_auth_remember') === 'true'
+    );
   });
 
   const [supabaseConnected, setSupabaseConnected] = useState<boolean>(false);
@@ -399,7 +403,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []);
 
-  const adminLogin = (email: string, pass: string) => {
+  const adminLogin = (email: string, pass: string, rememberDevice = true) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = pass.trim();
 
@@ -409,6 +413,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     ) {
       setIsAdminAuthenticated(true);
       sessionStorage.setItem('vsc_admin_auth', 'true');
+      if (rememberDevice) {
+        localStorage.setItem('vsc_admin_auth_remember', 'true');
+      } else {
+        localStorage.removeItem('vsc_admin_auth_remember');
+      }
+      localStorage.setItem('vsc_admin_saved_email', cleanEmail);
       return { success: true, message: 'Autenticado com sucesso! Bem-vindo ao painel.' };
     }
 
@@ -418,9 +428,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   };
 
+  const adminLoginWithBiometrics = (rememberDevice = true) => {
+    setIsAdminAuthenticated(true);
+    sessionStorage.setItem('vsc_admin_auth', 'true');
+    if (rememberDevice) {
+      localStorage.setItem('vsc_admin_auth_remember', 'true');
+    } else {
+      localStorage.removeItem('vsc_admin_auth_remember');
+    }
+    return { success: true, message: 'Autenticado via biometria do aparelho!' };
+  };
+
   const adminLogout = () => {
     setIsAdminAuthenticated(false);
     sessionStorage.removeItem('vsc_admin_auth');
+    localStorage.removeItem('vsc_admin_auth_remember');
     setViewMode('store');
   };
 
@@ -1528,6 +1550,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         calculateShipping,
         isAdminAuthenticated,
         adminLogin,
+        adminLoginWithBiometrics,
         adminLogout,
         supabaseConnected,
         syncAllToSupabase,
