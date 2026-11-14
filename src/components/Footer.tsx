@@ -169,12 +169,15 @@ export const Footer: React.FC = () => {
             <h4 className="text-xs font-bold text-white uppercase tracking-[0.16em]">Atendimento ao Cliente</h4>
             <ul className="space-y-2 text-xs">
               <li>
-                <strong className="text-white block">Central de Relacionamento:</strong>
-                0800 892 1400
-              </li>
-              <li>
-                <strong className="text-white block">WhatsApp Concierge:</strong>
-                (11) 99876-5432
+                <strong className="text-white block">WhatsApp:</strong>
+                <a
+                  href="https://wa.me/5592992939630"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors"
+                >
+                  (92) 99293-9630
+                </a>
               </li>
               <li>
                 <strong className="text-white block">E-mail Oficial:</strong>

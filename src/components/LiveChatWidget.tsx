@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  MessageSquare, 
-  X, 
-  Send, 
+import {
+  MessageSquare,
+  X,
+  Send,
   Clock,
   ShieldCheck
 } from 'lucide-react';
@@ -125,8 +125,8 @@ export const LiveChatWidget: React.FC = () => {
     const isMorning = text.includes('bom dia');
     const isAfternoon = text.includes('boa tarde');
     const isEvening = text.includes('boa noite');
-    const isGenericGreeting = /^(oi|ola|olá|oie|opa|hey|alo|alô|hello|e ai|e aí)/i.test(text) || 
-      text.includes('tudo bem') || 
+    const isGenericGreeting = /^(oi|ola|olá|oie|opa|hey|alo|alô|hello|e ai|e aí)/i.test(text) ||
+      text.includes('tudo bem') ||
       text.includes('como vai');
 
     if (isMorning || isAfternoon || isEvening || isGenericGreeting) {
@@ -220,7 +220,7 @@ export const LiveChatWidget: React.FC = () => {
 
     if (text.includes('humano') || text.includes('atendente') || text.includes('sac') || text.includes('whatsapp')) {
       return {
-        text: 'Encaminhamos sua solicitação para nossa equipe de atendimento. Você também pode falar diretamente pelo WhatsApp Concierge: (11) 99876-5432 ou pelo e-mail sandravasconcellossillva@gmail.com.',
+        text: 'Encaminhamos sua solicitação para nossa equipe de atendimento. Você também pode falar diretamente pelo WhatsApp: (92) 99293-9630 ou pelo e-mail sandravasconcellossillva@gmail.com.',
         quickActions: [
           { label: 'Rastrear Pedido', actionText: 'Quero rastrear meu pedido' }
         ]
@@ -286,9 +286,9 @@ export const LiveChatWidget: React.FC = () => {
           style={
             isMobileViewport
               ? {
-                  bottom: `${mobileBottomOffset}px`,
-                  right: 'max(0.75rem, env(safe-area-inset-right, 0.75rem))'
-                }
+                bottom: `${mobileBottomOffset}px`,
+                right: 'max(0.75rem, env(safe-area-inset-right, 0.75rem))'
+              }
               : undefined
           }
           className="fixed md:bottom-6 md:right-6 z-30 bg-[#111111]/95 hover:bg-[#8B1E3F] text-white px-3 py-2 md:px-4 md:py-3 rounded-full md:rounded-lg shadow-lg flex items-center gap-1.5 md:gap-2.5 transition-all duration-200 border border-white/15 cursor-pointer backdrop-blur-xs"
@@ -312,9 +312,9 @@ export const LiveChatWidget: React.FC = () => {
             style={
               isMobileViewport
                 ? {
-                    bottom: `${Math.max(68, mobileBottomOffset - 4)}px`,
-                    maxHeight: `${Math.max(280, viewportHeight - mobileBottomOffset - 16)}px`
-                  }
+                  bottom: `${Math.max(68, mobileBottomOffset - 4)}px`,
+                  maxHeight: `${Math.max(280, viewportHeight - mobileBottomOffset - 16)}px`
+                }
                 : undefined
             }
             className="fixed inset-x-2.5 sm:inset-x-auto sm:bottom-6 sm:right-6 z-50 sm:w-[380px] h-[480px] sm:h-[520px] max-h-[78dvh] sm:max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-neutral-200 flex flex-col overflow-hidden"
@@ -350,11 +350,10 @@ export const LiveChatWidget: React.FC = () => {
                 >
                   <div className="max-w-[85%] space-y-2">
                     <div
-                      className={`p-3.5 rounded-xl leading-relaxed ${
-                        msg.sender === 'user'
+                      className={`p-3.5 rounded-xl leading-relaxed ${msg.sender === 'user'
                           ? 'bg-[#111111] text-white rounded-br-none font-medium'
                           : 'bg-white text-neutral-800 border border-neutral-200 rounded-bl-none'
-                      }`}
+                        }`}
                     >
                       <p className="whitespace-pre-line">{msg.text}</p>
                       <span className="block text-[9px] mt-1.5 text-right text-neutral-400">
