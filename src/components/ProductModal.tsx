@@ -112,7 +112,7 @@ export const ProductModal: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 sm:p-8 max-h-[85vh] overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 sm:p-8 max-h-[88dvh] overflow-y-auto">
               
               {/* Left Column: Gallery */}
               <div className="md:col-span-6 space-y-4">

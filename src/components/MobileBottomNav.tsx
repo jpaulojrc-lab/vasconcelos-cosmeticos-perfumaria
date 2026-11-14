@@ -81,7 +81,7 @@ export const MobileBottomNav: React.FC = () => {
             setSelectedCategory('todos');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition cursor-pointer ${
+          className={`flex-1 min-h-[44px] flex flex-col items-center justify-center gap-0.5 py-1.5 active:scale-95 transition cursor-pointer ${
             viewMode === 'store' ? 'text-neutral-950 font-extrabold' : 'text-neutral-500'
           }`}
         >
@@ -95,7 +95,7 @@ export const MobileBottomNav: React.FC = () => {
             const catEl = document.getElementById('catalogo-produtos');
             if (catEl) catEl.scrollIntoView({ behavior: 'smooth' });
           }}
-          className="flex-1 flex flex-col items-center gap-0.5 py-1 text-neutral-500 hover:text-neutral-950 transition cursor-pointer"
+          className="flex-1 min-h-[44px] flex flex-col items-center justify-center gap-0.5 py-1.5 text-neutral-500 hover:text-neutral-950 active:scale-95 transition cursor-pointer"
         >
           <Grid className="w-4 h-4 sm:w-5 sm:h-5" />
           <span className="text-[9px] sm:text-[10px] font-semibold truncate">Produtos</span>
@@ -103,7 +103,7 @@ export const MobileBottomNav: React.FC = () => {
 
         <button
           onClick={() => setIsCartOpen(true)}
-          className="flex-1 flex flex-col items-center gap-0.5 py-1 text-neutral-500 hover:text-neutral-950 transition relative cursor-pointer"
+          className="flex-1 min-h-[44px] flex flex-col items-center justify-center gap-0.5 py-1.5 text-neutral-500 hover:text-neutral-950 active:scale-95 transition relative cursor-pointer"
         >
           <div className="relative">
             <ShoppingBag className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -124,7 +124,7 @@ export const MobileBottomNav: React.FC = () => {
               setIsAuthOpen(true);
             }
           }}
-          className="flex-1 flex flex-col items-center gap-0.5 py-1 text-neutral-500 hover:text-neutral-950 transition cursor-pointer"
+          className="flex-1 min-h-[44px] flex flex-col items-center justify-center gap-0.5 py-1.5 text-neutral-500 hover:text-neutral-950 active:scale-95 transition cursor-pointer"
         >
           <User className="w-4 h-4 sm:w-5 sm:h-5" />
           <span className="text-[9px] sm:text-[10px] font-semibold truncate max-w-[64px]">
@@ -137,7 +137,7 @@ export const MobileBottomNav: React.FC = () => {
             setViewMode('admin');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className={`flex-1 flex flex-col items-center gap-0.5 py-1 transition cursor-pointer ${
+          className={`flex-1 min-h-[44px] flex flex-col items-center justify-center gap-0.5 py-1.5 active:scale-95 transition cursor-pointer ${
             isAdminAuthenticated ? 'text-[#8B1E3F] font-extrabold' : 'text-neutral-400'
           }`}
         >

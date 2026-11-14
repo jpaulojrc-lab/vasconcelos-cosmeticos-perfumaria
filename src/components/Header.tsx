@@ -54,7 +54,10 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-white border-b border-neutral-200">
+    <header
+      className="sticky top-0 z-40 w-full bg-white border-b border-neutral-200"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
       {/* Main Header Row */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-18 sm:h-20 gap-4">
@@ -208,13 +211,25 @@ export const Header: React.FC = () => {
           <div className="pb-3 md:hidden">
             <div className="relative w-full">
               <input
-                type="text"
+                type="search"
+                enterKeyHint="search"
+                aria-label="Buscar produtos no catálogo"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar fragrâncias, séruns ou presentes..."
-                className="w-full bg-[#F6F5F2] border border-neutral-200 focus:border-neutral-900 focus:bg-white rounded-lg py-2 pl-9 pr-4 text-xs text-neutral-900 outline-hidden"
+                placeholder="Buscar produtos, fragrâncias ou presentes..."
+                className="w-full bg-[#F6F5F2] border border-neutral-200 focus:border-neutral-900 focus:bg-white rounded-xl py-2.5 pl-10 pr-10 text-sm text-neutral-900 outline-hidden"
               />
-              <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-3.5 pointer-events-none" aria-hidden="true" />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Limpar busca"
+                  className="absolute right-2.5 top-2 p-1.5 text-neutral-400 hover:text-neutral-900 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         )}

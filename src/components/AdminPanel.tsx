@@ -1789,7 +1789,7 @@ export const AdminPanel: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F6F2] text-neutral-900 pb-20">
+    <div className="min-h-dvh bg-[#F7F6F2] text-neutral-900 pb-20">
 
       {/* Top Admin Header */}
       <div className="bg-[#111111] text-white border-b border-neutral-800">
