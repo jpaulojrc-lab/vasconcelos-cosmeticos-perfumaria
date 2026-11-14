@@ -34,7 +34,8 @@ import {
   FileText,
   FileSpreadsheet,
   Image as ImageIcon,
-  ClipboardPaste
+  ClipboardPaste,
+  Star
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { Product, ProductCategory, Order, OrderStatus, Coupon, PaymentReceipt } from '../types';
@@ -389,6 +390,7 @@ export const AdminPanel: React.FC = () => {
   const [formNotesFundo, setFormNotesFundo] = useState('');
   const [formBenefitsText, setFormBenefitsText] = useState('');
   const [formActivesText, setFormActivesText] = useState('');
+  const [formIsBestSeller, setFormIsBestSeller] = useState(false);
 
   // Tracking Code edit state for order
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
@@ -1019,7 +1021,7 @@ export const AdminPanel: React.FC = () => {
                 }
               : undefined,
           actives: extracted.actives.length > 0 ? extracted.actives : undefined,
-          isBestSeller: true
+          isBestSeller: false
         });
 
         setIsProductModalOpen(false);
@@ -1244,6 +1246,7 @@ export const AdminPanel: React.FC = () => {
       setFormNotesFundo(product.notes?.fundo || '');
       setFormBenefitsText((product.benefits || []).join('\n'));
       setFormActivesText((product.actives || []).join(', '));
+      setFormIsBestSeller(Boolean(product.isBestSeller));
     } else {
       setEditingProductId(null);
       setFormName('');
@@ -1260,6 +1263,7 @@ export const AdminPanel: React.FC = () => {
       setFormNotesFundo('');
       setFormBenefitsText('Fixação prolongada e rastro marcante\nFórmula vegana e cruelty-free\nEmbalagem sofisticada com design exclusivo');
       setFormActivesText('');
+      setFormIsBestSeller(false);
     }
     setIsProductModalOpen(true);
   };
@@ -1292,7 +1296,8 @@ export const AdminPanel: React.FC = () => {
         images: [formImage || 'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=800&q=80'],
         benefits: benefitsArray.length > 0 ? benefitsArray : ['Fórmula exclusiva vasconcelos Presente'],
         notes: notesObj,
-        actives: activesArray.length > 0 ? activesArray : undefined
+        actives: activesArray.length > 0 ? activesArray : undefined,
+        isBestSeller: formIsBestSeller
       });
     } else {
       addProduct({
@@ -1311,7 +1316,7 @@ export const AdminPanel: React.FC = () => {
         benefits: benefitsArray.length > 0 ? benefitsArray : ['Fórmula exclusiva vasconcelos Presente', 'Fragrância marcante', 'Testado dermatologicamente'],
         notes: notesObj,
         actives: activesArray.length > 0 ? activesArray : undefined,
-        isBestSeller: true
+        isBestSeller: formIsBestSeller
       });
     }
 
@@ -2617,15 +2622,30 @@ export const AdminPanel: React.FC = () => {
                           </td>
 
                           <td className="py-3 px-4">
-                            {p.isFlashSale ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">
-                                Promo Relâmpago
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-100 text-neutral-700">
-                                Ativo na Loja
-                              </span>
-                            )}
+                            <div className="flex flex-col items-start gap-1.5">
+                              {p.isFlashSale ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">
+                                  Promo Relâmpago
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-100 text-neutral-700">
+                                  Ativo na Loja
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => updateProduct(p.id, { isBestSeller: !p.isBestSeller })}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition cursor-pointer ${
+                                  p.isBestSeller
+                                    ? 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200'
+                                    : 'bg-white text-neutral-500 border-neutral-200 hover:border-amber-300 hover:text-amber-700'
+                                }`}
+                                title={p.isBestSeller ? 'Remover do Destaque da Vitrine' : 'Colocar em Destaque na Vitrine'}
+                              >
+                                <Star className={`w-3 h-3 ${p.isBestSeller ? 'fill-amber-500 text-amber-600' : ''}`} />
+                                <span>{p.isBestSeller ? 'Em Destaque' : 'Destacar'}</span>
+                              </button>
+                            </div>
                           </td>
 
                           <td className="py-3 px-4 text-right space-x-2">
@@ -4384,6 +4404,24 @@ export const AdminPanel: React.FC = () => {
                   className="w-full mt-1 bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2 text-xs focus:bg-white"
                 />
               </div>
+
+              <label className="flex items-center gap-2.5 p-3 rounded-xl border border-amber-200 bg-amber-50/70 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={formIsBestSeller}
+                  onChange={(e) => setFormIsBestSeller(e.target.checked)}
+                  className="w-4 h-4 accent-amber-600 rounded"
+                />
+                <div>
+                  <span className="font-bold text-neutral-900 flex items-center gap-1.5">
+                    <Star className={`w-3.5 h-3.5 ${formIsBestSeller ? 'fill-amber-500 text-amber-600' : 'text-amber-600'}`} />
+                    Exibir no Banner Principal (Em Destaque)
+                  </span>
+                  <span className="text-[11px] text-neutral-600 block">
+                    Quando marcado, este produto aparece no banner de destaque no topo do site com sua descrição real.
+                  </span>
+                </div>
+              </label>
 
               <div className="pt-3 border-t border-neutral-100 flex items-center justify-between">
                 <span className="text-[11px] text-neutral-400">

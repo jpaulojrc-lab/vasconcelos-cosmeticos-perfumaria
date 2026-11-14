@@ -55,32 +55,6 @@ export const Header: React.FC = () => {
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white border-b border-neutral-200">
-      {/* Top Commercial Bar — Prestige Retail Style */}
-      <div className="bg-[#111111] text-neutral-200 text-[10px] sm:text-[11px] py-2 px-4 tracking-[0.1em] uppercase">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center space-x-6 overflow-x-auto whitespace-nowrap scrollbar-none mx-auto sm:mx-0">
-            <span className="font-medium">
-              Frete Grátis acima de <strong className="text-white font-bold">R$ 199</strong>
-            </span>
-            <span className="hidden md:inline text-neutral-600">|</span>
-            <span className="hidden md:inline font-medium">
-              Parcelamento em até <strong className="text-white font-bold">10x sem juros</strong>
-            </span>
-            <span className="hidden lg:inline text-neutral-600">|</span>
-            <span className="hidden lg:inline font-medium">
-              Amostra de perfumaria em todos os pedidos
-            </span>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-2 shrink-0">
-            <span className="text-neutral-400">1ª Compra 10% OFF:</span>
-            <span className="bg-white/10 text-white px-2 py-0.5 font-mono font-bold tracking-widest border border-white/15">
-              BEMVINDO10
-            </span>
-          </div>
-        </div>
-      </div>
-
       {/* Main Header Row */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-18 sm:h-20 gap-4">

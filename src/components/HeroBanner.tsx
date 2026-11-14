@@ -1,17 +1,47 @@
-import React from 'react';
-import { ArrowRight, ShoppingBag, Truck, CreditCard, ShieldCheck, Gift } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowRight, ShoppingBag, Truck, CreditCard, ShieldCheck, Gift, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatBRL } from '../utils/formatters';
+import { ProductCategory } from '../types';
+
+const CATEGORY_LABELS: Record<ProductCategory, string> = {
+  perfumaria: 'Perfumaria',
+  bodysplash: 'Body Splash',
+  skincare: 'Skincare',
+  maquiagem: 'Maquiagem',
+  combos: 'Combos & Kits',
+};
 
 export const HeroBanner: React.FC = () => {
   const { setSelectedCategory, products, addToCart, setSelectedProduct, setIsProductModalOpen } = useStore();
+  const [featuredIndex, setFeaturedIndex] = useState(0);
 
-  const heroProduct = products.find(p => p.id === 'prod-1') || products[0];
+  const featuredProducts = products.filter(p => p.isBestSeller);
+  const displayList = featuredProducts.length > 0 ? featuredProducts : products.slice(0, 1);
+  const safeIndex = displayList.length > 0 ? featuredIndex % displayList.length : 0;
+  const heroProduct = displayList[safeIndex];
+
+  const categoryLabel = heroProduct ? (CATEGORY_LABELS[heroProduct.category] || 'Catálogo') : 'Catálogo';
+  const hasNotes = Boolean(
+    heroProduct?.notes && (heroProduct.notes.topo || heroProduct.notes.coracao || heroProduct.notes.fundo)
+  );
 
   const handleOpenHeroProduct = () => {
     if (!heroProduct) return;
     setSelectedProduct(heroProduct);
     setIsProductModalOpen(true);
+  };
+
+  const handlePrevFeatured = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (displayList.length <= 1) return;
+    setFeaturedIndex((prev) => (prev - 1 + displayList.length) % displayList.length);
+  };
+
+  const handleNextFeatured = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (displayList.length <= 1) return;
+    setFeaturedIndex((prev) => (prev + 1) % displayList.length);
   };
 
   return (
@@ -23,41 +53,87 @@ export const HeroBanner: React.FC = () => {
           {/* Left Editorial Column */}
           <div className="lg:col-span-7 p-7 sm:p-12 lg:p-14 flex flex-col justify-between space-y-8">
             <div className="space-y-5">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span className="text-[10px] uppercase tracking-[0.22em] font-bold px-2.5 py-1 bg-white/10 text-neutral-200 border border-white/15">
-                  Eau de Parfum • 100ml
+                  {categoryLabel}{heroProduct?.volume ? ` • ${heroProduct.volume}` : ''}
                 </span>
                 <span className="text-[11px] uppercase tracking-[0.18em] text-[#D4AF37] font-semibold">
-                  Edição Assinatura
+                  Destaque da Loja
                 </span>
+                {displayList.length > 1 && (
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handlePrevFeatured}
+                      aria-label="Destaque anterior"
+                      className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-[10px] font-mono text-neutral-300 px-1">
+                      {safeIndex + 1}/{displayList.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleNextFeatured}
+                      aria-label="Próximo destaque"
+                      className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition cursor-pointer"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
 
-              <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1]">
-                Obsession Rouge:{' '}
-                <span className="font-serif-luxury italic font-normal text-[#E8D3B9]">
-                  intensidade que permanece na pele.
-                </span>
-              </h1>
+              {heroProduct ? (
+                <>
+                  <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1]">
+                    {heroProduct.name}
+                    {heroProduct.subtitle && (
+                      <>
+                        {': '}
+                        <span className="font-serif-luxury italic font-normal text-[#E8D3B9]">
+                          {heroProduct.subtitle}
+                        </span>
+                      </>
+                    )}
+                  </h1>
 
-              <p className="text-sm sm:text-base text-neutral-300 max-w-xl leading-relaxed font-normal">
-                Formulado com óleos essenciais importados de alta concentração para entregar mais de 14 horas de fixação real. Um acorde oriental floral criado para momentos inesquecíveis.
-              </p>
+                  {heroProduct.description && (
+                    <p className="text-sm sm:text-base text-neutral-300 max-w-xl leading-relaxed font-normal">
+                      {heroProduct.description}
+                    </p>
+                  )}
 
-              {/* Olfactory Notes Strip — Clean Studio Layout */}
-              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-white/10 max-w-lg">
-                <div>
-                  <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Nota de Topo</span>
-                  <span className="text-xs font-semibold text-white">Pera & Pimenta Rosa</span>
-                </div>
-                <div className="border-l border-white/10 pl-3">
-                  <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Coração</span>
-                  <span className="text-xs font-semibold text-white">Orquídea Negra</span>
-                </div>
-                <div className="border-l border-white/10 pl-3">
-                  <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Fundo</span>
-                  <span className="text-xs font-semibold text-white">Baunilha & Âmbar</span>
-                </div>
-              </div>
+                  {/* Olfactory Notes Strip — Only shown when product has notes */}
+                  {hasNotes && (
+                    <div className="grid grid-cols-3 gap-3 pt-2 border-t border-white/10 max-w-lg">
+                      {heroProduct.notes?.topo && (
+                        <div>
+                          <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Nota de Topo</span>
+                          <span className="text-xs font-semibold text-white">{heroProduct.notes.topo}</span>
+                        </div>
+                      )}
+                      {heroProduct.notes?.coracao && (
+                        <div className={heroProduct.notes?.topo ? 'border-l border-white/10 pl-3' : ''}>
+                          <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Coração</span>
+                          <span className="text-xs font-semibold text-white">{heroProduct.notes.coracao}</span>
+                        </div>
+                      )}
+                      {heroProduct.notes?.fundo && (
+                        <div className={(heroProduct.notes?.topo || heroProduct.notes?.coracao) ? 'border-l border-white/10 pl-3' : ''}>
+                          <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Fundo</span>
+                          <span className="text-xs font-semibold text-white">{heroProduct.notes.fundo}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1]">
+                  Vasconcelos Cosméticos & Perfumaria
+                </h1>
+              )}
             </div>
 
             {/* Pricing & Commercial CTAs */}
@@ -93,13 +169,13 @@ export const HeroBanner: React.FC = () => {
 
                 <button
                   onClick={() => {
-                    setSelectedCategory('perfumaria');
+                    setSelectedCategory(heroProduct?.category || 'todos');
                     const el = document.getElementById('catalogo-produtos');
                     if (el) el.scrollIntoView({ behavior: 'smooth' });
                   }}
                   className="px-5 py-3.5 border border-white/25 hover:border-white text-white font-semibold text-xs uppercase tracking-[0.12em] rounded-lg flex items-center gap-2 transition cursor-pointer"
                 >
-                  <span>Ver Perfumaria</span>
+                  <span>Ver {categoryLabel}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -121,15 +197,15 @@ export const HeroBanner: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                 
                 {/* Minimal Editorial Caption */}
-                <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between text-white">
+                <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between text-white gap-3">
                   <div>
                     <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-300 block">
-                      Best-Seller Nº 1
+                      Destaque da Loja
                     </span>
                     <p className="text-sm font-bold">{heroProduct.name}</p>
                   </div>
-                  <span className="text-[11px] font-semibold underline underline-offset-4 text-neutral-200 group-hover:text-white">
-                    Ver Pirâmide Olfativa
+                  <span className="text-[11px] font-semibold underline underline-offset-4 text-neutral-200 group-hover:text-white shrink-0">
+                    {hasNotes ? 'Ver Pirâmide Olfativa' : 'Ver Detalhes'}
                   </span>
                 </div>
               </>
