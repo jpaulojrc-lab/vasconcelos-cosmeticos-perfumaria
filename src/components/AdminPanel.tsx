@@ -2665,8 +2665,99 @@ export const AdminPanel: React.FC = () => {
               </div>
             )}
 
-            {/* Products Table */}
-            <div className="bg-white rounded-3xl border border-neutral-200 shadow-xs overflow-hidden">
+            {/* Products Mobile Cards (< md) */}
+            <div className="md:hidden space-y-3">
+              {filteredProducts.map((p) => {
+                const isLowStock = p.stock < 25;
+                return (
+                  <div
+                    key={p.id}
+                    className="bg-white rounded-2xl border border-neutral-200 p-3.5 shadow-xs space-y-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={p.images[0]}
+                        alt={p.name}
+                        className="w-16 h-16 object-cover rounded-xl border border-neutral-200 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="uppercase text-[10px] font-bold text-pink-600">
+                            {p.category}
+                          </span>
+                          <span className="text-[11px] text-neutral-500 shrink-0">{p.volume}</span>
+                        </div>
+                        <p className="font-bold text-sm text-neutral-900 leading-snug">{p.name}</p>
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          <span className="font-extrabold text-sm text-neutral-950">{formatBRL(p.price)}</span>
+                          {p.originalPrice > p.price && (
+                            <span className="text-[11px] text-neutral-400 line-through">
+                              {formatBRL(p.originalPrice)}
+                            </span>
+                          )}
+                          <span className={`ml-auto font-mono text-xs font-bold ${isLowStock ? 'text-amber-600' : 'text-neutral-700'}`}>
+                            Estoque: {p.stock} un.
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {p.isFlashSale ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800">
+                            Promo Relâmpago
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-100 text-neutral-700">
+                            Ativo na Loja
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => updateProduct(p.id, { isBestSeller: !p.isBestSeller })}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition cursor-pointer ${
+                            p.isBestSeller
+                              ? 'bg-amber-100 text-amber-800 border-amber-300'
+                              : 'bg-white text-neutral-600 border-neutral-200'
+                          }`}
+                        >
+                          <Star className={`w-3 h-3 ${p.isBestSeller ? 'fill-amber-500 text-amber-600' : ''}`} />
+                          <span>{p.isBestSeller ? 'Em Destaque' : 'Destacar'}</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenProductEdit(p)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-neutral-100 hover:bg-pink-50 text-neutral-700 hover:text-pink-600 font-bold text-xs transition cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Editar</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Deseja remover "${p.name}" do catálogo?`)) {
+                              deleteProduct(p.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition cursor-pointer"
+                          title="Excluir Produto"
+                          aria-label="Excluir Produto"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Products Table (Desktop) */}
+            <div className="hidden md:block bg-white rounded-3xl border border-neutral-200 shadow-xs overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-neutral-50 text-neutral-500 font-bold uppercase tracking-wider border-b border-neutral-200">
@@ -3218,7 +3309,7 @@ export const AdminPanel: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
               {/* COLUNA ESQUERDA: LISTA DE CLIENTES CADASTRADOS E PEDIDOS */}
-              <div className="lg:col-span-5 bg-white rounded-3xl border border-neutral-200 p-5 shadow-xs flex flex-col space-y-4">
+              <div className="lg:col-span-5 bg-white rounded-3xl border border-neutral-200 p-3.5 sm:p-5 shadow-xs flex flex-col space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-extrabold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-pink-600" />
@@ -3265,9 +3356,9 @@ export const AdminPanel: React.FC = () => {
                             : 'hover:bg-neutral-50'
                             }`}
                         >
-                          <div className="space-y-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-neutral-900 truncate">
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-xs font-bold text-neutral-900">
                                 {item.name}
                               </span>
                               {item.orderNumber ? (
@@ -3706,7 +3797,71 @@ export const AdminPanel: React.FC = () => {
                   Nenhum cliente cadastrado ainda. Use o formulário acima para cadastrar clientes pelo Nome e Telefone.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  {/* Clientes Mobile Cards (< md) */}
+                  <div className="md:hidden space-y-2.5">
+                    {registeredUsers
+                      .filter((u) => {
+                        const q = customerSearch.trim().toLowerCase();
+                        if (!q) return true;
+                        return (
+                          (u.name || '').toLowerCase().includes(q) ||
+                          (u.phone || '').toLowerCase().includes(q) ||
+                          (u.email || '').toLowerCase().includes(q)
+                        );
+                      })
+                      .map((u) => {
+                        const displayEmail =
+                          u.email && !u.email.endsWith('@vasconcelos.local')
+                            ? u.email
+                            : 'E-mail não informado';
+                        const phoneDigits = (u.phone || '').replace(/\D/g, '');
+                        const custOrderCount = orders.filter((o) => {
+                          const oDigits = (o.customer?.phone || '').replace(/\D/g, '');
+                          return (
+                            (phoneDigits.length >= 10 && oDigits.endsWith(phoneDigits.slice(-10))) ||
+                            (u.email && !u.email.endsWith('@vasconcelos.local') && o.customer?.email?.toLowerCase() === u.email.toLowerCase())
+                          );
+                        }).length;
+
+                        return (
+                          <div
+                            key={u.id}
+                            className="p-3.5 rounded-2xl border border-neutral-200 bg-neutral-50/70 space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-bold text-sm text-neutral-900">{u.name}</p>
+                                <p className="text-xs font-mono font-bold text-emerald-800 mt-0.5">
+                                  {u.phone || 'Sem telefone'}
+                                </p>
+                              </div>
+                              <span className="px-2.5 py-1 rounded-full bg-white border border-neutral-200 text-neutral-700 font-bold text-[11px] shrink-0">
+                                {custOrderCount} {custOrderCount === 1 ? 'pedido' : 'pedidos'}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 pt-2 border-t border-neutral-200/70 text-xs">
+                              <span className="text-neutral-500 truncate">{displayEmail}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Excluir o cadastro de ${u.name}?`)) {
+                                    deleteCustomerByAdmin(u.id);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-bold text-[11px] transition cursor-pointer shrink-0"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Excluir</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  {/* Clientes Table (Desktop) */}
+                  <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-neutral-50 text-neutral-500 font-bold uppercase border-b border-neutral-200">
                       <tr>
@@ -3777,7 +3932,8 @@ export const AdminPanel: React.FC = () => {
                         })}
                     </tbody>
                   </table>
-                </div>
+                  </div>
+                </>
               )}
             </div>
           </div>
