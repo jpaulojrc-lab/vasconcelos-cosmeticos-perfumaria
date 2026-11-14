@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useStore } from '../context/StoreContext';
-import { formatBRL, formatInstallment, sanitizeHtmlToText } from '../utils/formatters';
+import { formatBRL, sanitizeHtmlToText } from '../utils/formatters';
 
 export const ProductModal: React.FC = () => {
   const { 
@@ -226,7 +226,7 @@ export const ProductModal: React.FC = () => {
                       )}
                     </div>
                     <p className="text-xs font-semibold text-neutral-700 mt-1">
-                      ou {formatInstallment(selectedProduct.price, 10)}
+                      Parcelamento c/ gerente
                     </p>
                     <p className="text-[11px] text-emerald-700 font-medium mt-0.5">
                       5% de desconto imediato no PIX

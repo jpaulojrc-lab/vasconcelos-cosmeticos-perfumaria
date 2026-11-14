@@ -48,7 +48,7 @@ export const MobileBottomNav: React.FC = () => {
             </div>
             <div className="min-w-0">
               <p className="text-[9px] uppercase tracking-wider text-neutral-300 font-bold truncate">
-                Sua Sacola • Frete Grátis
+                Sua Sacola • Entrega Grátis
               </p>
               <p className="text-xs sm:text-sm font-extrabold text-white truncate">
                 {formatBRL(cartTotal)}

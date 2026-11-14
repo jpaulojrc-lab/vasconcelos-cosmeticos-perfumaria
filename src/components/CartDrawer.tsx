@@ -118,11 +118,11 @@ export const CartDrawer: React.FC = () => {
                     {diffToFreeShipping === 0 ? (
                       <span className="text-emerald-700 font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
-                        Frete Grátis desbloqueado
+                        Entrega Grátis desbloqueada
                       </span>
                     ) : (
                       <span>
-                        Faltam <strong className="text-neutral-950 font-bold">{formatBRL(diffToFreeShipping)}</strong> para Frete Grátis
+                        Faltam <strong className="text-neutral-950 font-bold">{formatBRL(diffToFreeShipping)}</strong> para Entrega Grátis
                       </span>
                     )}
                   </span>
@@ -317,7 +317,7 @@ export const CartDrawer: React.FC = () => {
                     <span>{formatBRL(cartTotal)}</span>
                   </div>
                   <p className="text-[11px] text-neutral-500 text-right">
-                    em até 10x de {formatBRL(cartTotal / 10)} sem juros
+                    Parcelamento c/ gerente
                   </p>
                 </div>
 

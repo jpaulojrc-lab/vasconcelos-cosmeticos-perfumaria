@@ -2,7 +2,7 @@ import React from 'react';
 import { ShoppingBag, Star } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../types';
-import { formatBRL, formatInstallment } from '../utils/formatters';
+import { formatBRL } from '../utils/formatters';
 
 export const FlashOffers: React.FC = () => {
   const { products, addToCart, setSelectedProduct, setIsProductModalOpen } = useStore();
@@ -100,7 +100,7 @@ export const FlashOffers: React.FC = () => {
                     )}
                   </div>
                   <p className="text-[11px] text-neutral-500 mt-0.5">
-                    {formatInstallment(product.price, 10)}
+                    Parcelamento c/ gerente
                   </p>
                 </div>
 

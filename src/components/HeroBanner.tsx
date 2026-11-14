@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowRight, ShoppingBag, Truck, CreditCard, ShieldCheck, Gift, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowRight, ShoppingBag, Truck, CreditCard, Gift, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { formatBRL, sanitizeHtmlToText } from '../utils/formatters';
 import { ProductCategory } from '../types';
@@ -172,7 +172,7 @@ export const HeroBanner: React.FC = () => {
                     )}
                   </div>
                   <span className="text-[11px] text-neutral-400 block mt-0.5">
-                    Em até 10x de {formatBRL(heroProduct.price / 10)} sem juros ou 5% OFF no PIX
+                    Parcelamento c/ gerente ou 5% OFF no PIX
                   </span>
                 </div>
               )}
@@ -236,13 +236,13 @@ export const HeroBanner: React.FC = () => {
         </div>
       </div>
 
-      {/* Commercial Service Strip — Sephora / Beleza na Web Reference */}
+      {/* Commercial Service Strip */}
       <div className="border-t border-neutral-100 bg-[#F7F6F2]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
           <div className="flex items-center gap-3">
             <Truck className="w-4 h-4 text-neutral-800 shrink-0" />
             <div>
-              <p className="font-bold text-neutral-900">Frete Grátis Brasil</p>
+              <p className="font-bold text-neutral-900">Entrega Grátis</p>
               <p className="text-[11px] text-neutral-500">Em compras acima de R$ 199</p>
             </div>
           </div>
@@ -250,8 +250,8 @@ export const HeroBanner: React.FC = () => {
           <div className="flex items-center gap-3">
             <CreditCard className="w-4 h-4 text-neutral-800 shrink-0" />
             <div>
-              <p className="font-bold text-neutral-900">Até 10x Sem Juros</p>
-              <p className="text-[11px] text-neutral-500">Ou 5% de desconto imediato no PIX</p>
+              <p className="font-bold text-neutral-900">Parcelamento Facilitado</p>
+              <p className="text-[11px] text-neutral-500">Parcelamento c/ gerente</p>
             </div>
           </div>
 
@@ -260,14 +260,6 @@ export const HeroBanner: React.FC = () => {
             <div>
               <p className="font-bold text-neutral-900">Mimo Exclusivo na Sacola</p>
               <p className="text-[11px] text-neutral-500">Amostra de luxo em pedidos elegíveis</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <ShieldCheck className="w-4 h-4 text-neutral-800 shrink-0" />
-            <div>
-              <p className="font-bold text-neutral-900">Procedência Garantida</p>
-              <p className="text-[11px] text-neutral-500">Fórmulas dermatologicamente testadas</p>
             </div>
           </div>
         </div>

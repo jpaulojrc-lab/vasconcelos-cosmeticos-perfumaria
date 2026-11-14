@@ -79,7 +79,7 @@ export const Footer: React.FC = () => {
                 VASCONCELOS
               </span>
               <span className="text-[9px] uppercase tracking-[0.26em] text-neutral-500 font-semibold block mt-1">
-                Perfumaria & Cosméticos
+                Utensílios e Presentes
               </span>
             </div>
             <p className="text-neutral-400 leading-relaxed text-xs">
@@ -216,7 +216,7 @@ export const Footer: React.FC = () => {
 
         {/* Bottom copyright & payment methods */}
         <div className="pt-8 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 gap-4">
-          <p>© 2026 Vasconcelos Perfumaria e Cosméticos Ltda. Todos os direitos reservados. CNPJ: 42.189.902/0001-14</p>
+          <p>© 2026 Vasconcelos Utensílios e Presentes Ltda. Todos os direitos reservados. CNPJ: 42.189.902/0001-14</p>
           
           {/* Payment Badges */}
           <div className="flex items-center gap-2 font-mono text-[10px] text-neutral-300">

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Heart, ShoppingBag, Star, Check } from 'lucide-react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
-import { formatBRL, formatInstallment, sanitizeHtmlToText } from '../utils/formatters';
+import { formatBRL, sanitizeHtmlToText } from '../utils/formatters';
 
 interface ProductCardProps {
   product: Product;
@@ -111,7 +111,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             )}
           </div>
           <p className="text-[11px] text-neutral-500 mt-0.5">
-            {formatInstallment(product.price, 10)}
+            Parcelamento c/ gerente
           </p>
 
           <button

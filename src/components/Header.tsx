@@ -81,7 +81,7 @@ export const Header: React.FC = () => {
                 VASCONCELOS
               </span>
               <span className="text-[8px] sm:text-[9px] uppercase tracking-[0.28em] text-neutral-500 font-semibold mt-1">
-                Perfumaria & Cosméticos
+                Utensílios e Presentes
               </span>
             </div>
           </div>
@@ -126,8 +126,8 @@ export const Header: React.FC = () => {
               <button
                 onClick={() => setViewMode('admin')}
                 className={`p-2 rounded-lg transition cursor-pointer ${isAdminAuthenticated
-                    ? 'text-neutral-900 bg-neutral-100 hover:bg-neutral-200'
-                    : 'text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100'
+                  ? 'text-neutral-900 bg-neutral-100 hover:bg-neutral-200'
+                  : 'text-neutral-400 hover:text-neutral-800 hover:bg-neutral-100'
                   }`}
                 title={isAdminAuthenticated ? 'Painel Administrativo (Logado)' : 'Acesso Restrito (Administração)'}
                 aria-label="Acesso Administrativo"
@@ -231,8 +231,8 @@ export const Header: React.FC = () => {
                   key={cat.id}
                   onClick={() => handleCategoryClick(cat.id)}
                   className={`py-3 text-[11px] uppercase tracking-[0.14em] transition border-b-2 cursor-pointer ${isActive
-                      ? 'border-neutral-950 text-neutral-950 font-bold'
-                      : 'border-transparent text-neutral-600 hover:text-neutral-950 font-medium'
+                    ? 'border-neutral-950 text-neutral-950 font-bold'
+                    : 'border-transparent text-neutral-600 hover:text-neutral-950 font-medium'
                     }`}
                 >
                   {cat.label}
@@ -245,8 +245,8 @@ export const Header: React.FC = () => {
             <button
               onClick={() => setViewMode('blog')}
               className={`py-3 text-[11px] uppercase tracking-[0.14em] transition border-b-2 cursor-pointer ${viewMode === 'blog'
-                  ? 'border-[#8B1E3F] text-[#8B1E3F] font-bold'
-                  : 'border-transparent text-neutral-600 hover:text-neutral-950 font-medium'
+                ? 'border-[#8B1E3F] text-[#8B1E3F] font-bold'
+                : 'border-transparent text-neutral-600 hover:text-neutral-950 font-medium'
                 }`}
             >
               Journal & Editorial
@@ -266,8 +266,8 @@ export const Header: React.FC = () => {
               key={cat.id}
               onClick={() => handleCategoryClick(cat.id)}
               className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold flex items-center justify-between ${selectedCategory === cat.id && viewMode === 'store'
-                  ? 'bg-neutral-950 text-white'
-                  : 'text-neutral-700 hover:bg-neutral-100'
+                ? 'bg-neutral-950 text-white'
+                : 'text-neutral-700 hover:bg-neutral-100'
                 }`}
             >
               <span>{cat.label}</span>

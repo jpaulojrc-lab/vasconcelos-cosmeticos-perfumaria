@@ -57,7 +57,7 @@ export const ProductCatalog: React.FC = () => {
             Compra Fácil pelo Celular • 3 Passos
           </span>
           <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-            Frete Grátis
+            Entrega Grátis
           </span>
         </div>
 
