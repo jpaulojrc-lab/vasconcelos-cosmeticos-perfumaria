@@ -221,10 +221,13 @@ export const AdminPanel: React.FC = () => {
   const [manualOrderCustomerId, setManualOrderCustomerId] = useState('');
   const [manualOrderName, setManualOrderName] = useState('');
   const [manualOrderPhone, setManualOrderPhone] = useState('');
+  const [manualOrderEmail, setManualOrderEmail] = useState('');
+  const [manualCustomerFeedback, setManualCustomerFeedback] = useState<string | null>(null);
   const [manualOrderProductId, setManualOrderProductId] = useState('');
   const [manualOrderCustomItemName, setManualOrderCustomItemName] = useState('');
   const [manualOrderCustomItemPrice, setManualOrderCustomItemPrice] = useState('');
   const [manualOrderCustomItemQty, setManualOrderCustomItemQty] = useState('1');
+  const [manualProductFeedback, setManualProductFeedback] = useState<string | null>(null);
   const [manualOrderItems, setManualOrderItems] = useState<
     Array<{ productId: string; name: string; price: number; quantity: number; image: string }>
   >([]);
@@ -237,10 +240,13 @@ export const AdminPanel: React.FC = () => {
     setManualOrderCustomerId('');
     setManualOrderName('');
     setManualOrderPhone('');
-    setManualOrderProductId(products[0]?.id || '');
-    setManualOrderCustomItemName('');
+    setManualOrderEmail('');
+    setManualCustomerFeedback(null);
+    setManualOrderProductId(products[0]?.id || '__new__');
+    setManualOrderCustomItemName(products[0]?.name || '');
     setManualOrderCustomItemPrice(products[0]?.price ? products[0].price.toFixed(2) : '');
     setManualOrderCustomItemQty('1');
+    setManualProductFeedback(null);
     setManualOrderItems([]);
     setManualOrderPaymentMethod('pix');
     setManualOrderReceivedNow('');
@@ -249,14 +255,58 @@ export const AdminPanel: React.FC = () => {
     setIsManualOrderModalOpen(true);
   };
 
+  const handleQuickRegisterCustomerInManualOrder = () => {
+    const res = registerCustomerByAdmin({
+      name: manualOrderName,
+      phone: manualOrderPhone,
+      email: manualOrderEmail
+    });
+    if (res.success && res.user) {
+      setManualOrderCustomerId(res.user.id);
+      setManualCustomerFeedback(`✅ Cliente "${res.user.name}" cadastrado e selecionado!`);
+    } else {
+      setManualCustomerFeedback(`⚠️ ${res.message}`);
+    }
+  };
+
   const handleAddManualOrderItem = () => {
     const qty = Math.max(1, parseInt(manualOrderCustomItemQty) || 1);
-    const selectedProd = products.find((p) => p.id === manualOrderProductId);
+    const isNewProductMode = manualOrderProductId === '__new__';
+    const selectedProd = !isNewProductMode
+      ? products.find((p) => p.id === manualOrderProductId)
+      : undefined;
     const itemName = manualOrderCustomItemName.trim() || selectedProd?.name || '';
     const itemPrice =
       parseFloat(manualOrderCustomItemPrice.replace(',', '.')) || selectedProd?.price || 0;
 
-    if (!itemName || itemPrice <= 0) return;
+    if (!itemName || itemPrice <= 0) {
+      setManualProductFeedback('⚠️ Informe a descrição e um valor maior que R$ 0,00.');
+      return;
+    }
+
+    const defaultImg =
+      'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=400&q=80';
+
+    if (isNewProductMode) {
+      addProduct({
+        name: itemName,
+        subtitle: 'Cadastro rápido (Venda Manual)',
+        category: 'perfumaria',
+        price: itemPrice,
+        originalPrice: itemPrice,
+        stock: 10,
+        volume: 'Unidade',
+        description: itemName,
+        images: [defaultImg],
+        rating: 5.0,
+        reviewCount: 1,
+        benefits: ['Produto cadastrado via venda manual'],
+        isBestSeller: false
+      });
+      setManualProductFeedback(`✅ Produto "${itemName}" cadastrado no catálogo e adicionado!`);
+    } else {
+      setManualProductFeedback(null);
+    }
 
     setManualOrderItems((prev) => [
       ...prev,
@@ -265,14 +315,16 @@ export const AdminPanel: React.FC = () => {
         name: itemName,
         price: itemPrice,
         quantity: qty,
-        image:
-          selectedProd?.images?.[0] ||
-          'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=400&q=80'
+        image: selectedProd?.images?.[0] || defaultImg
       }
     ]);
 
     setManualOrderCustomItemName('');
+    setManualOrderCustomItemPrice('');
     setManualOrderCustomItemQty('1');
+    if (isNewProductMode) {
+      setManualOrderProductId('');
+    }
   };
 
   const handleSaveManualOrder = (e: React.FormEvent) => {
@@ -289,8 +341,10 @@ export const AdminPanel: React.FC = () => {
     const cleanPhone = manualOrderPhone.trim();
     const phoneDigits = cleanPhone.replace(/\D/g, '');
     const selectedUser = registeredUsers.find((u) => u.id === manualOrderCustomerId);
+    const cleanEmail = manualOrderEmail.trim().toLowerCase();
     const customerEmail =
       selectedUser?.email ||
+      cleanEmail ||
       (phoneDigits.length >= 10
         ? `cliente.${phoneDigits}@vasconcelos.local`
         : `cliente.${Date.now()}@vasconcelos.local`);
@@ -299,7 +353,8 @@ export const AdminPanel: React.FC = () => {
     if (!selectedUser && phoneDigits.length >= 10) {
       registerCustomerByAdmin({
         name: manualOrderName.trim(),
-        phone: cleanPhone
+        phone: cleanPhone,
+        email: cleanEmail || undefined
       });
     }
 
@@ -3757,39 +3812,62 @@ export const AdminPanel: React.FC = () => {
             <form onSubmit={handleSaveManualOrder} className="space-y-4 text-xs">
               {/* 1. Cliente */}
               <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-200 space-y-3">
-                <p className="font-extrabold text-neutral-900 uppercase tracking-wider text-[11px]">
-                  1. Cliente
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-extrabold text-neutral-900 uppercase tracking-wider text-[11px]">
+                    1. Cliente
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualOrderCustomerId('__new__');
+                      setManualOrderName('');
+                      setManualOrderPhone('');
+                      setManualOrderEmail('');
+                      setManualCustomerFeedback(null);
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Cadastrar Novo Cliente</span>
+                  </button>
+                </div>
 
-                {registeredUsers.length > 0 && (
-                  <div>
-                    <label className="font-bold text-neutral-700 block mb-1">
-                      Selecionar cliente já cadastrado (opcional)
-                    </label>
-                    <select
-                      value={manualOrderCustomerId}
-                      onChange={(e) => {
-                        const cid = e.target.value;
-                        setManualOrderCustomerId(cid);
-                        const found = registeredUsers.find((u) => u.id === cid);
-                        if (found) {
-                          setManualOrderName(found.name);
-                          setManualOrderPhone(found.phone || '');
-                        }
-                      }}
-                      className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs font-semibold"
-                    >
-                      <option value="">-- Ou digite os dados abaixo --</option>
-                      {registeredUsers.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name} {u.phone ? `(${u.phone})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Selecionar cliente ou cadastrar novo
+                  </label>
+                  <select
+                    value={manualOrderCustomerId}
+                    onChange={(e) => {
+                      const cid = e.target.value;
+                      setManualOrderCustomerId(cid);
+                      setManualCustomerFeedback(null);
+                      if (cid === '__new__') {
+                        setManualOrderName('');
+                        setManualOrderPhone('');
+                        setManualOrderEmail('');
+                        return;
+                      }
+                      const found = registeredUsers.find((u) => u.id === cid);
+                      if (found) {
+                        setManualOrderName(found.name);
+                        setManualOrderPhone(found.phone || '');
+                        setManualOrderEmail(found.email?.endsWith('@vasconcelos.local') ? '' : (found.email || ''));
+                      }
+                    }}
+                    className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs font-semibold"
+                  >
+                    <option value="">-- Selecione um cliente ou digite abaixo --</option>
+                    <option value="__new__">+ Cadastrar Novo Cliente</option>
+                    {registeredUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} {u.phone ? `(${u.phone})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="font-bold text-neutral-700 block mb-1">
                       Nome do Cliente *
@@ -3805,7 +3883,7 @@ export const AdminPanel: React.FC = () => {
                   </div>
                   <div>
                     <label className="font-bold text-neutral-700 block mb-1">
-                      Telefone / WhatsApp
+                      Telefone / WhatsApp *
                     </label>
                     <input
                       type="tel"
@@ -3815,25 +3893,80 @@ export const AdminPanel: React.FC = () => {
                       className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs font-mono"
                     />
                   </div>
+                  <div>
+                    <label className="font-bold text-neutral-700 block mb-1">
+                      E-mail (opcional)
+                    </label>
+                    <input
+                      type="email"
+                      value={manualOrderEmail}
+                      onChange={(e) => setManualOrderEmail(e.target.value)}
+                      placeholder="cliente@email.com"
+                      className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
                 </div>
+
+                {(manualOrderCustomerId === '__new__' || !manualOrderCustomerId) && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <span className="text-[11px] text-neutral-500">
+                      Preencha nome e WhatsApp e clique ao lado para salvar na lista de clientes.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleQuickRegisterCustomerInManualOrder}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] transition cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Salvar Cliente no Cadastro</span>
+                    </button>
+                  </div>
+                )}
+
+                {manualCustomerFeedback && (
+                  <p className="text-[11px] font-semibold text-neutral-800 bg-white border border-neutral-200 rounded-lg px-3 py-1.5">
+                    {manualCustomerFeedback}
+                  </p>
+                )}
               </div>
 
               {/* 2. Produtos / Itens da Compra */}
               <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-200 space-y-3">
-                <p className="font-extrabold text-neutral-900 uppercase tracking-wider text-[11px]">
-                  2. Produtos da Compra
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-extrabold text-neutral-900 uppercase tracking-wider text-[11px]">
+                    2. Produtos da Compra
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualOrderProductId('__new__');
+                      setManualOrderCustomItemName('');
+                      setManualOrderCustomItemPrice('');
+                      setManualProductFeedback(null);
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Cadastrar Novo Produto</span>
+                  </button>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
                   <div className="sm:col-span-5">
                     <label className="font-bold text-neutral-700 block mb-1">
-                      Escolher do Catálogo
+                      Escolher do Catálogo ou Cadastrar
                     </label>
                     <select
                       value={manualOrderProductId}
                       onChange={(e) => {
                         const pid = e.target.value;
                         setManualOrderProductId(pid);
+                        setManualProductFeedback(null);
+                        if (pid === '__new__' || pid === '') {
+                          setManualOrderCustomItemName('');
+                          setManualOrderCustomItemPrice('');
+                          return;
+                        }
                         const prod = products.find((p) => p.id === pid);
                         if (prod) {
                           setManualOrderCustomItemName(prod.name);
@@ -3842,7 +3975,8 @@ export const AdminPanel: React.FC = () => {
                       }}
                       className="w-full bg-white border border-neutral-300 rounded-xl px-2.5 py-2 text-xs"
                     >
-                      <option value="">-- Item avulso / manual --</option>
+                      <option value="">-- Item avulso (só neste pedido) --</option>
+                      <option value="__new__">+ Cadastrar Novo Produto (Resumido)</option>
                       {products.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name} ({formatBRL(p.price)})
@@ -3853,13 +3987,13 @@ export const AdminPanel: React.FC = () => {
 
                   <div className="sm:col-span-3">
                     <label className="font-bold text-neutral-700 block mb-1">
-                      Nome / Descrição
+                      Descrição do Produto
                     </label>
                     <input
                       type="text"
                       value={manualOrderCustomItemName}
                       onChange={(e) => setManualOrderCustomItemName(e.target.value)}
-                      placeholder="Nome do produto"
+                      placeholder="Ex: Kit Presente"
                       className="w-full bg-white border border-neutral-300 rounded-xl px-2.5 py-2 text-xs"
                     />
                   </div>
@@ -3890,12 +4024,33 @@ export const AdminPanel: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleAddManualOrderItem}
-                      className="flex-1 py-2 px-2.5 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white font-extrabold text-xs cursor-pointer"
+                      className={`flex-1 py-2 px-2.5 rounded-xl text-white font-extrabold text-xs cursor-pointer ${
+                        manualOrderProductId === '__new__'
+                          ? 'bg-emerald-700 hover:bg-emerald-800'
+                          : 'bg-[#111111] hover:bg-[#8B1E3F]'
+                      }`}
+                      title={
+                        manualOrderProductId === '__new__'
+                          ? 'Cadastrar produto no catálogo e adicionar ao pedido'
+                          : 'Adicionar ao pedido'
+                      }
                     >
-                      + Add
+                      {manualOrderProductId === '__new__' ? '+ Salvar' : '+ Add'}
                     </button>
                   </div>
                 </div>
+
+                {manualOrderProductId === '__new__' && (
+                  <p className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 font-medium">
+                    Modo resumido: preencha <strong>Descrição</strong> e <strong>Valor</strong> acima e clique em <strong>+ Salvar</strong> para cadastrar no catálogo e incluir na compra.
+                  </p>
+                )}
+
+                {manualProductFeedback && (
+                  <p className="text-[11px] font-semibold text-neutral-800 bg-white border border-neutral-200 rounded-lg px-3 py-1.5">
+                    {manualProductFeedback}
+                  </p>
+                )}
 
                 {manualOrderItems.length > 0 ? (
                   <div className="bg-white rounded-xl border border-neutral-200 divide-y divide-neutral-100">
