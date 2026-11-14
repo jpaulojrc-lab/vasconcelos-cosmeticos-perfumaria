@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowRight, ShoppingBag, Truck, CreditCard, ShieldCheck, Gift, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
-import { formatBRL } from '../utils/formatters';
+import { formatBRL, sanitizeHtmlToText } from '../utils/formatters';
 import { ProductCategory } from '../types';
 
 const CATEGORY_LABELS: Record<ProductCategory, string> = {
@@ -22,8 +22,18 @@ export const HeroBanner: React.FC = () => {
   const heroProduct = displayList[safeIndex];
 
   const categoryLabel = heroProduct ? (CATEGORY_LABELS[heroProduct.category] || 'Catálogo') : 'Catálogo';
+  const isFragranceCategory = heroProduct?.category === 'perfumaria' || heroProduct?.category === 'bodysplash';
   const hasNotes = Boolean(
-    heroProduct?.notes && (heroProduct.notes.topo || heroProduct.notes.coracao || heroProduct.notes.fundo)
+    isFragranceCategory &&
+    heroProduct?.notes &&
+    (heroProduct.notes.topo || heroProduct.notes.coracao || heroProduct.notes.fundo)
+  );
+  const cleanSubtitle = sanitizeHtmlToText(heroProduct?.subtitle);
+  const cleanDescription = sanitizeHtmlToText(heroProduct?.description);
+  const showSubtitleInHeading = Boolean(
+    cleanSubtitle &&
+    cleanSubtitle.length <= 90 &&
+    !cleanDescription.toLowerCase().startsWith(cleanSubtitle.toLowerCase())
   );
 
   const handleOpenHeroProduct = () => {
@@ -49,7 +59,7 @@ export const HeroBanner: React.FC = () => {
       {/* Main Campaign Split Banner */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 rounded-2xl overflow-hidden border border-neutral-200 bg-[#141312] text-white shadow-sm">
-          
+
           {/* Left Editorial Column */}
           <div className="lg:col-span-7 p-7 sm:p-12 lg:p-14 flex flex-col justify-between space-y-8">
             <div className="space-y-5">
@@ -89,20 +99,31 @@ export const HeroBanner: React.FC = () => {
                 <>
                   <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1]">
                     {heroProduct.name}
-                    {heroProduct.subtitle && (
+                    {showSubtitleInHeading && (
                       <>
                         {': '}
                         <span className="font-serif-luxury italic font-normal text-[#E8D3B9]">
-                          {heroProduct.subtitle}
+                          {cleanSubtitle}
                         </span>
                       </>
                     )}
                   </h1>
 
-                  {heroProduct.description && (
-                    <p className="text-sm sm:text-base text-neutral-300 max-w-xl leading-relaxed font-normal">
-                      {heroProduct.description}
-                    </p>
+                  {cleanDescription && (
+                    <div className="space-y-2 max-w-xl">
+                      <p className="text-sm sm:text-base text-neutral-300 leading-relaxed font-normal line-clamp-4">
+                        {cleanDescription}
+                      </p>
+                      {cleanDescription.length > 220 && (
+                        <button
+                          type="button"
+                          onClick={handleOpenHeroProduct}
+                          className="text-xs font-semibold text-[#E8D3B9] hover:text-white underline underline-offset-4 transition cursor-pointer"
+                        >
+                          Ler descrição completa
+                        </button>
+                      )}
+                    </div>
                   )}
 
                   {/* Olfactory Notes Strip — Only shown when product has notes */}
@@ -183,7 +204,7 @@ export const HeroBanner: React.FC = () => {
           </div>
 
           {/* Right Product Editorial Image */}
-          <div 
+          <div
             onClick={handleOpenHeroProduct}
             className="lg:col-span-5 relative min-h-[320px] sm:min-h-[420px] bg-[#1E1C1A] overflow-hidden cursor-pointer group"
           >
@@ -195,7 +216,7 @@ export const HeroBanner: React.FC = () => {
                   className="w-full h-full object-cover object-center group-hover:scale-103 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                
+
                 {/* Minimal Editorial Caption */}
                 <div className="absolute bottom-5 left-5 right-5 flex items-end justify-between text-white gap-3">
                   <div>

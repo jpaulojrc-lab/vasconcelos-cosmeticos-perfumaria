@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Heart, ShoppingBag, Star, Check } from 'lucide-react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
-import { formatBRL, formatInstallment } from '../utils/formatters';
+import { formatBRL, formatInstallment, sanitizeHtmlToText } from '../utils/formatters';
 
 interface ProductCardProps {
   product: Product;
@@ -87,7 +87,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
           {/* Subtitle / Olfactory family */}
           <p className="text-xs text-neutral-500 line-clamp-1 mt-1">
-            {product.subtitle}
+            {sanitizeHtmlToText(product.subtitle)}
           </p>
 
           {/* Rating */}

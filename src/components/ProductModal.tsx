@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useStore } from '../context/StoreContext';
-import { formatBRL, formatInstallment } from '../utils/formatters';
+import { formatBRL, formatInstallment, sanitizeHtmlToText } from '../utils/formatters';
 
 export const ProductModal: React.FC = () => {
   const { 
@@ -190,7 +190,7 @@ export const ProductModal: React.FC = () => {
                   <h2 className="text-xl sm:text-2xl font-bold text-neutral-950 mt-1">
                     {selectedProduct.name}
                   </h2>
-                  <p className="text-xs text-neutral-500 mt-1">{selectedProduct.subtitle}</p>
+                  <p className="text-xs text-neutral-500 mt-1">{sanitizeHtmlToText(selectedProduct.subtitle)}</p>
 
                   {/* Rating header */}
                   <div className="flex items-center gap-2 mt-2.5">
@@ -239,7 +239,7 @@ export const ProductModal: React.FC = () => {
                       Descrição do Produto
                     </h4>
                     <p className="text-xs sm:text-sm text-neutral-700 leading-relaxed">
-                      {selectedProduct.description}
+                      {sanitizeHtmlToText(selectedProduct.description)}
                     </p>
                   </div>
 
