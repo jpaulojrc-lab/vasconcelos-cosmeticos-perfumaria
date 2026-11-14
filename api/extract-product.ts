@@ -369,36 +369,34 @@ Campos obrigatórios:
       .replace(/-/g, ' ')
       .trim();
 
+    const cleanHtmlText = (raw?: string | null) =>
+      (raw || '')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const cleanDescription = cleanHtmlText(fetchedMeta?.description);
+    const classifyText = `${lowerUrl} ${(fetchedMeta?.title || '').toLowerCase()} ${cleanDescription.toLowerCase()}`;
+
     let detectedCat: 'perfumaria' | 'bodysplash' | 'skincare' | 'maquiagem' | 'combos' =
       'perfumaria';
-    if (
-      lowerUrl.includes('body-splash') ||
-      lowerUrl.includes('bodysplash') ||
-      lowerUrl.includes('splash')
-    ) {
+    if (/kit|combo|presente|conjunto/.test(classifyText)) {
+      detectedCat = 'combos';
+    } else if (/body[-\s]?splash|\bsplash\b/.test(classifyText)) {
       detectedCat = 'bodysplash';
     } else if (
-      lowerUrl.includes('serum') ||
-      lowerUrl.includes('skincare') ||
-      lowerUrl.includes('hidratante') ||
-      lowerUrl.includes('creme') ||
-      lowerUrl.includes('locao')
+      /sabonete|hidratante|creme|lo[cç][aã]o|s[eé]rum|skincare|[oó]leo|capilar|booster|col[aá]geno|wesha|suplemento|minicaps|shaker|coqueteleira|esfoliante|gel/.test(
+        classifyText
+      )
     ) {
       detectedCat = 'skincare';
-    } else if (
-      lowerUrl.includes('gloss') ||
-      lowerUrl.includes('batom') ||
-      lowerUrl.includes('base') ||
-      lowerUrl.includes('maquiagem') ||
-      lowerUrl.includes('mascara')
-    ) {
+    } else if (/gloss|batom|\bbase\b|maquiagem|m[aá]scara|r[ií]mel|blush|corretivo/.test(classifyText)) {
       detectedCat = 'maquiagem';
-    } else if (
-      lowerUrl.includes('kit') ||
-      lowerUrl.includes('combo') ||
-      lowerUrl.includes('presente')
-    ) {
-      detectedCat = 'combos';
     }
 
     const volumeMatch =
@@ -428,7 +426,7 @@ Campos obrigatórios:
       data: {
         name: fallbackTitle,
         subtitle:
-          fetchedMeta?.description?.slice(0, 90) ||
+          cleanDescription.slice(0, 90) ||
           'Fragrância e cuidado exclusivo com alta qualidade',
         category: detectedCat,
         price: parsedPrice,
@@ -436,7 +434,7 @@ Campos obrigatórios:
         volume: detectedVolume,
         images: [fallbackImage],
         description:
-          fetchedMeta?.description ||
+          cleanDescription ||
           'Produto selecionado da curadoria VASCONCELOS Cosméticos & Perfumaria.',
         benefits: [
           'Produto original selecionado VASCONCELOS',
