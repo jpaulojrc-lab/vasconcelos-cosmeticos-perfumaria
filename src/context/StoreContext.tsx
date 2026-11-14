@@ -108,6 +108,7 @@ interface StoreContextType {
 
   // Orders
   createOrder: (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => Order;
+  createManualOrder: (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => Order;
   updateOrderStatus: (orderId: string, status: Order['orderStatus'], trackingCode?: string) => void;
   deleteOrder: (orderId: string) => void;
   updateOrderPaymentConditions: (
@@ -1184,6 +1185,40 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return newOrder;
   };
 
+  // Lançamento manual pelo ADM (venda presencial, telefone ou WhatsApp, sem limpar sacola nem disparar auto-checkout)
+  const createManualOrder = (orderData: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => {
+    const newOrder: Order = {
+      ...orderData,
+      id: `ord-${Date.now()}`,
+      orderNumber: `VSC-${Math.floor(10000 + Math.random() * 90000)}`,
+      createdAt: new Date().toISOString(),
+      pixCopiaECola:
+        orderData.paymentMethod === 'pix'
+          ? `00020126580014br.gov.bcb.pix0136pix@vasconcelosbeauty.com.br5204000053039865405${orderData.total.toFixed(2)}5802BR5916VASCONCELOS BEAUTY6009SAO PAULO62070503***6304${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+          : undefined
+    };
+
+    setOrders(prev => [newOrder, ...prev]);
+    supabaseUpsert(SUPABASE_TABLES.orders, mapOrderToRow(newOrder), 'id');
+
+    // Baixa estoque dos produtos do catálogo que foram incluídos na venda
+    setProducts(prev =>
+      prev.map(p => {
+        const matchedItems = newOrder.items.filter(i => i.productId === p.id);
+        if (matchedItems.length > 0) {
+          const totalQty = matchedItems.reduce((s, i) => s + i.quantity, 0);
+          const newStock = Math.max(0, p.stock - totalQty);
+          const updatedProd = { ...p, stock: newStock };
+          supabaseUpsert(SUPABASE_TABLES.products, mapProductToRow(updatedProd), 'id');
+          return updatedProd;
+        }
+        return p;
+      })
+    );
+
+    return newOrder;
+  };
+
   const updateOrderStatus = (orderId: string, status: Order['orderStatus'], trackingCode?: string) => {
     setOrders(prev =>
       prev.map(o => {
@@ -1480,6 +1515,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         deleteCoupon,
         notifyCustomersAboutCoupon,
         createOrder,
+        createManualOrder,
         updateOrderStatus,
         deleteOrder,
         updateOrderPaymentConditions,

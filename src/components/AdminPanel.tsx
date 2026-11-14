@@ -64,6 +64,7 @@ export const AdminPanel: React.FC = () => {
     deleteProduct,
     updateOrderStatus,
     deleteOrder,
+    createManualOrder,
     updateOrderPaymentConditions,
     registerCustomerByAdmin,
     deleteCustomerByAdmin,
@@ -205,6 +206,150 @@ export const AdminPanel: React.FC = () => {
       setCustomerPhoneInput('');
       setCustomerEmailInput('');
     }
+  };
+
+  // Lançamento Manual de Venda / Pedido (Compra presencial ou por telefone para controle)
+  const [isManualOrderModalOpen, setIsManualOrderModalOpen] = useState(false);
+  const [manualOrderCustomerId, setManualOrderCustomerId] = useState('');
+  const [manualOrderName, setManualOrderName] = useState('');
+  const [manualOrderPhone, setManualOrderPhone] = useState('');
+  const [manualOrderProductId, setManualOrderProductId] = useState('');
+  const [manualOrderCustomItemName, setManualOrderCustomItemName] = useState('');
+  const [manualOrderCustomItemPrice, setManualOrderCustomItemPrice] = useState('');
+  const [manualOrderCustomItemQty, setManualOrderCustomItemQty] = useState('1');
+  const [manualOrderItems, setManualOrderItems] = useState<
+    Array<{ productId: string; name: string; price: number; quantity: number; image: string }>
+  >([]);
+  const [manualOrderPaymentMethod, setManualOrderPaymentMethod] = useState<Order['paymentMethod']>('pix');
+  const [manualOrderReceivedNow, setManualOrderReceivedNow] = useState('');
+  const [manualOrderDeliveryStatus, setManualOrderDeliveryStatus] = useState<'pendente' | 'entregue'>('entregue');
+  const [manualOrderNotes, setManualOrderNotes] = useState('');
+
+  const handleOpenManualOrderModal = () => {
+    setManualOrderCustomerId('');
+    setManualOrderName('');
+    setManualOrderPhone('');
+    setManualOrderProductId(products[0]?.id || '');
+    setManualOrderCustomItemName('');
+    setManualOrderCustomItemPrice(products[0]?.price ? products[0].price.toFixed(2) : '');
+    setManualOrderCustomItemQty('1');
+    setManualOrderItems([]);
+    setManualOrderPaymentMethod('pix');
+    setManualOrderReceivedNow('');
+    setManualOrderDeliveryStatus('entregue');
+    setManualOrderNotes('Venda lançada manualmente pelo ADM (presencial / telefone).');
+    setIsManualOrderModalOpen(true);
+  };
+
+  const handleAddManualOrderItem = () => {
+    const qty = Math.max(1, parseInt(manualOrderCustomItemQty) || 1);
+    const selectedProd = products.find((p) => p.id === manualOrderProductId);
+    const itemName = manualOrderCustomItemName.trim() || selectedProd?.name || '';
+    const itemPrice =
+      parseFloat(manualOrderCustomItemPrice.replace(',', '.')) || selectedProd?.price || 0;
+
+    if (!itemName || itemPrice <= 0) return;
+
+    setManualOrderItems((prev) => [
+      ...prev,
+      {
+        productId: selectedProd?.id || `manual-${Date.now()}`,
+        name: itemName,
+        price: itemPrice,
+        quantity: qty,
+        image:
+          selectedProd?.images?.[0] ||
+          'https://images.unsplash.com/photo-1541643600914-78b084683601?auto=format&fit=crop&w=400&q=80'
+      }
+    ]);
+
+    setManualOrderCustomItemName('');
+    setManualOrderCustomItemQty('1');
+  };
+
+  const handleSaveManualOrder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualOrderName.trim() || manualOrderItems.length === 0) return;
+
+    const totalAmount = Number(
+      manualOrderItems.reduce((sum, it) => sum + it.price * it.quantity, 0).toFixed(2)
+    );
+    const receivedNum = Math.max(
+      0,
+      Math.min(totalAmount, parseFloat(manualOrderReceivedNow.replace(',', '.')) || 0)
+    );
+    const cleanPhone = manualOrderPhone.trim();
+    const phoneDigits = cleanPhone.replace(/\D/g, '');
+    const selectedUser = registeredUsers.find((u) => u.id === manualOrderCustomerId);
+    const customerEmail =
+      selectedUser?.email ||
+      (phoneDigits.length >= 10
+        ? `cliente.${phoneDigits}@vasconcelos.local`
+        : `cliente.${Date.now()}@vasconcelos.local`);
+
+    // Se digitou cliente novo com telefone, já salva também na lista de clientes
+    if (!selectedUser && phoneDigits.length >= 10) {
+      registerCustomerByAdmin({
+        name: manualOrderName.trim(),
+        phone: cleanPhone
+      });
+    }
+
+    const initialReceipts: PaymentReceipt[] =
+      receivedNum > 0
+        ? [
+            {
+              id: `rec-${Date.now()}`,
+              date: new Date().toISOString().slice(0, 10),
+              amount: receivedNum,
+              method:
+                manualOrderPaymentMethod === 'pix'
+                  ? 'PIX'
+                  : manualOrderPaymentMethod === 'credit_card'
+                    ? 'Cartão'
+                    : 'Dinheiro / Presencial'
+            }
+          ]
+        : [];
+
+    const isPaid = receivedNum >= totalAmount - 0.01;
+
+    createManualOrder({
+      customer: {
+        name: manualOrderName.trim(),
+        email: customerEmail,
+        phone: cleanPhone,
+        cpf: ''
+      },
+      shippingAddress: {
+        id: `addr-${Date.now()}`,
+        name: manualOrderName.trim(),
+        cep: '69000-000',
+        logradouro: 'Compra presencial / telefone (entrega combinada)',
+        numero: 'S/N',
+        bairro: 'Local',
+        localidade: 'Manaus',
+        uf: 'AM'
+      },
+      shippingMethod: {
+        name: 'VasconcelosExpress / Presencial',
+        price: 0,
+        days: 1
+      },
+      items: manualOrderItems,
+      subtotal: totalAmount,
+      discount: 0,
+      shippingCost: 0,
+      total: totalAmount,
+      paymentMethod: manualOrderPaymentMethod,
+      installments: 1,
+      paymentStatus: isPaid ? 'paid' : 'pending',
+      orderStatus: manualOrderDeliveryStatus,
+      adminPaymentTerms: manualOrderNotes.trim() || undefined,
+      paymentReceipts: initialReceipts
+    });
+
+    setIsManualOrderModalOpen(false);
   };
 
   // Filters for Stock
@@ -399,6 +544,7 @@ export const AdminPanel: React.FC = () => {
 
     // 1. Add orders first (since they have specific order amounts & numbers)
     orders.forEach((o) => {
+      if (o.orderStatus === 'cancelado') return;
       const matchedUser = registeredUsers.find(
         (u) => u.email.toLowerCase() === o.customer.email.toLowerCase()
       );
@@ -406,13 +552,22 @@ export const AdminPanel: React.FC = () => {
       const key = `${o.customer.email.toLowerCase()}-${o.orderNumber}`;
       seenKeys.add(o.customer.email.toLowerCase());
 
+      const receipts = o.paymentReceipts || [];
+      const receivedSum = receipts.reduce((s, r) => s + Number(r.amount || 0), 0);
+      const remaining =
+        receipts.length > 0
+          ? Math.max(0, Number((o.total - receivedSum).toFixed(2)))
+          : o.paymentStatus === 'paid'
+            ? 0
+            : o.total;
+
       list.push({
         id: `ord-${o.id}`,
         name: o.customer.name,
         email: o.customer.email,
         phone: phoneToUse,
         orderNumber: o.orderNumber,
-        amount: o.total,
+        amount: remaining,
         itemsSummary: o.items.map((i) => `${i.quantity}x ${i.name}`).join(', '),
         paymentMethod: o.paymentMethod === 'credit_card' ? 'Cartão de Crédito' : o.paymentMethod.toUpperCase(),
         pixKey: o.pixCopiaECola || 'pix@vasconcelosbeauty.com.br',
@@ -436,8 +591,8 @@ export const AdminPanel: React.FC = () => {
           email: u.email,
           phone: u.phone || '',
           orderNumber: '',
-          amount: 149.90,
-          itemsSummary: 'Produtos vasconcelos Presente',
+          amount: 0,
+          itemsSummary: 'Sem pedido em aberto',
           paymentMethod: 'PIX',
           pixKey: 'pix@vasconcelosbeauty.com.br',
           orderStatus: 'cadastro'
@@ -454,7 +609,7 @@ export const AdminPanel: React.FC = () => {
   const [billPhone, setBillPhone] = useState(() => billingDirectory[0]?.phone || '');
   const [billOrderNum, setBillOrderNum] = useState(() => billingDirectory[0]?.orderNumber || '');
   const [billAmount, setBillAmount] = useState(() =>
-    billingDirectory[0]?.amount ? billingDirectory[0].amount.toFixed(2) : '149.90'
+    billingDirectory[0]?.amount ? billingDirectory[0].amount.toFixed(2) : '0.00'
   );
   const [billDueDate, setBillDueDate] = useState('Hoje');
   const [billPixKey, setBillPixKey] = useState(
@@ -1707,15 +1862,27 @@ export const AdminPanel: React.FC = () => {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleExportFinancialCsv}
-                  className="self-start sm:self-auto px-3 py-2 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-[11px] font-extrabold flex items-center gap-1.5 transition cursor-pointer shadow-xs shrink-0"
-                  title="Baixar planilha para Excel"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Baixar Excel</span>
-                </button>
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleOpenManualOrderModal}
+                    className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-extrabold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                    title="Lançar uma compra feita pessoalmente ou por telefone para controle"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Lançar Compra / Pedido</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExportFinancialCsv}
+                    className="px-3 py-2 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white text-[11px] font-extrabold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                    title="Baixar planilha para Excel"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>Baixar Excel</span>
+                  </button>
+                </div>
               </div>
 
               {/* 4 Cartões Compactos no Topo (Visíveis de imediato no PC e Celular) */}
@@ -3001,13 +3168,20 @@ export const AdminPanel: React.FC = () => {
 
                             <p className="text-[11px] text-neutral-500 flex items-center gap-1.5 truncate">
                               <Mail className="w-3 h-3 text-pink-600 shrink-0" />
-                              <span className="truncate">{item.email}</span>
+                              <span className="truncate">
+                                {item.email && !item.email.endsWith('@vasconcelos.local')
+                                  ? item.email
+                                  : 'E-mail não informado'}
+                              </span>
                             </p>
                           </div>
 
                           <div className="text-right shrink-0">
-                            <span className="text-xs font-black text-neutral-900 block">
-                              {formatBRL(item.amount)}
+                            <span
+                              className={`text-xs font-black block ${item.amount > 0 ? 'text-neutral-900' : 'text-emerald-700'
+                                }`}
+                            >
+                              {item.amount > 0 ? formatBRL(item.amount) : 'Sem débitos'}
                             </span>
                             {item.orderStatus && item.orderStatus !== 'cadastro' && (
                               <span className="text-[10px] uppercase font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
@@ -3489,6 +3663,286 @@ export const AdminPanel: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Modal de Lançamento Manual de Venda / Pedido (Presencial ou Telefone) */}
+      {isManualOrderModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="relative bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
+              <div>
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-700">
+                  Controle Financeiro & Pedidos
+                </span>
+                <h3 className="text-lg font-extrabold text-neutral-900 font-display">
+                  Lançar Compra / Pedido Manual
+                </h3>
+                <p className="text-[11px] text-neutral-500">
+                  Registre uma venda feita pessoalmente ou por telefone para controlar pagamentos e entregas.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsManualOrderModalOpen(false)}
+                className="p-1.5 rounded-full text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveManualOrder} className="space-y-4 text-xs">
+              {/* 1. Cliente */}
+              <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-200 space-y-3">
+                <p className="font-extrabold text-neutral-900 uppercase tracking-wider text-[11px]">
+                  1. Cliente
+                </p>
+
+                {registeredUsers.length > 0 && (
+                  <div>
+                    <label className="font-bold text-neutral-700 block mb-1">
+                      Selecionar cliente já cadastrado (opcional)
+                    </label>
+                    <select
+                      value={manualOrderCustomerId}
+                      onChange={(e) => {
+                        const cid = e.target.value;
+                        setManualOrderCustomerId(cid);
+                        const found = registeredUsers.find((u) => u.id === cid);
+                        if (found) {
+                          setManualOrderName(found.name);
+                          setManualOrderPhone(found.phone || '');
+                        }
+                      }}
+                      className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs font-semibold"
+                    >
+                      <option value="">-- Ou digite os dados abaixo --</option>
+                      {registeredUsers.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} {u.phone ? `(${u.phone})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-neutral-700 block mb-1">
+                      Nome do Cliente *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={manualOrderName}
+                      onChange={(e) => setManualOrderName(e.target.value)}
+                      placeholder="Ex: Cristiano"
+                      className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-neutral-700 block mb-1">
+                      Telefone / WhatsApp
+                    </label>
+                    <input
+                      type="tel"
+                      value={manualOrderPhone}
+                      onChange={(e) => setManualOrderPhone(formatPhoneMask(e.target.value))}
+                      placeholder="(92) 99999-9999"
+                      className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Produtos / Itens da Compra */}
+              <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-200 space-y-3">
+                <p className="font-extrabold text-neutral-900 uppercase tracking-wider text-[11px]">
+                  2. Produtos da Compra
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                  <div className="sm:col-span-5">
+                    <label className="font-bold text-neutral-700 block mb-1">
+                      Escolher do Catálogo
+                    </label>
+                    <select
+                      value={manualOrderProductId}
+                      onChange={(e) => {
+                        const pid = e.target.value;
+                        setManualOrderProductId(pid);
+                        const prod = products.find((p) => p.id === pid);
+                        if (prod) {
+                          setManualOrderCustomItemName(prod.name);
+                          setManualOrderCustomItemPrice(prod.price.toFixed(2));
+                        }
+                      }}
+                      className="w-full bg-white border border-neutral-300 rounded-xl px-2.5 py-2 text-xs"
+                    >
+                      <option value="">-- Item avulso / manual --</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} ({formatBRL(p.price)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <label className="font-bold text-neutral-700 block mb-1">
+                      Nome / Descrição
+                    </label>
+                    <input
+                      type="text"
+                      value={manualOrderCustomItemName}
+                      onChange={(e) => setManualOrderCustomItemName(e.target.value)}
+                      placeholder="Nome do produto"
+                      className="w-full bg-white border border-neutral-300 rounded-xl px-2.5 py-2 text-xs"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="font-bold text-neutral-700 block mb-1">
+                      Valor (R$)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={manualOrderCustomItemPrice}
+                      onChange={(e) => setManualOrderCustomItemPrice(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-white border border-neutral-300 rounded-xl px-2.5 py-2 text-xs"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2 flex gap-1.5">
+                    <input
+                      type="number"
+                      min="1"
+                      value={manualOrderCustomItemQty}
+                      onChange={(e) => setManualOrderCustomItemQty(e.target.value)}
+                      className="w-12 bg-white border border-neutral-300 rounded-xl px-2 py-2 text-xs text-center font-bold"
+                      title="Quantidade"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddManualOrderItem}
+                      className="flex-1 py-2 px-2.5 rounded-xl bg-[#111111] hover:bg-[#8B1E3F] text-white font-extrabold text-xs cursor-pointer"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+
+                {manualOrderItems.length > 0 ? (
+                  <div className="bg-white rounded-xl border border-neutral-200 divide-y divide-neutral-100">
+                    {manualOrderItems.map((it, idx) => (
+                      <div key={idx} className="flex items-center justify-between px-3 py-2 text-xs">
+                        <span className="font-semibold text-neutral-800">
+                          <strong>{it.quantity}×</strong> {it.name}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-neutral-900">
+                            {formatBRL(it.price * it.quantity)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setManualOrderItems((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                            className="text-red-500 hover:text-red-700 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between px-3 py-2 bg-emerald-50 font-extrabold text-emerald-900">
+                      <span>Total da Compra:</span>
+                      <span>
+                        {formatBRL(
+                          manualOrderItems.reduce((s, it) => s + it.price * it.quantity, 0)
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-amber-700 font-semibold">
+                    Selecione um produto acima e clique em <strong>+ Add</strong> para incluir na compra.
+                  </p>
+                )}
+              </div>
+
+              {/* 3. Pagamento & Entrega */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-neutral-50 border border-neutral-200">
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Forma de Pagamento
+                  </label>
+                  <select
+                    value={manualOrderPaymentMethod}
+                    onChange={(e) =>
+                      setManualOrderPaymentMethod(e.target.value as Order['paymentMethod'])
+                    }
+                    className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs font-semibold"
+                  >
+                    <option value="pix">PIX</option>
+                    <option value="credit_card">Cartão de Crédito</option>
+                    <option value="boleto">Dinheiro / À Vista / Combinado</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Valor já recebido agora (R$)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={manualOrderReceivedNow}
+                    onChange={(e) => setManualOrderReceivedNow(e.target.value)}
+                    placeholder="0.00 (se for receber depois)"
+                    className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-neutral-700 block mb-1">
+                    Status da Entrega
+                  </label>
+                  <select
+                    value={manualOrderDeliveryStatus}
+                    onChange={(e) =>
+                      setManualOrderDeliveryStatus(e.target.value as 'pendente' | 'entregue')
+                    }
+                    className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-xs font-semibold"
+                  >
+                    <option value="entregue">✅ Já Entregue</option>
+                    <option value="pendente">⏳ Aguardando Entrega</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsManualOrderModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-neutral-300 font-bold text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={manualOrderItems.length === 0 || !manualOrderName.trim()}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Salvar Pedido no Controle</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Product Add / Edit Modal */}
       {isProductModalOpen && (
