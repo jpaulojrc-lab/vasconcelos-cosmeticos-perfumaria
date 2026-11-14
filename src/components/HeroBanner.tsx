@@ -61,8 +61,8 @@ export const HeroBanner: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 rounded-2xl overflow-hidden border border-neutral-200 bg-[#141312] text-white shadow-sm">
 
           {/* Left Editorial Column */}
-          <div className="lg:col-span-7 p-7 sm:p-12 lg:p-14 flex flex-col justify-between space-y-8">
-            <div className="space-y-5">
+          <div className="lg:col-span-7 p-5 sm:p-10 lg:p-14 flex flex-col justify-between space-y-5 sm:space-y-8">
+            <div className="space-y-4 sm:space-y-5">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-[10px] uppercase tracking-[0.22em] font-bold px-2.5 py-1 bg-white/10 text-neutral-200 border border-white/15">
                   {categoryLabel}{heroProduct?.volume ? ` • ${heroProduct.volume}` : ''}
@@ -97,7 +97,7 @@ export const HeroBanner: React.FC = () => {
 
               {heroProduct ? (
                 <>
-                  <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1]">
+                  <h1 className="text-2xl sm:text-5xl font-bold tracking-tight text-white leading-[1.15]">
                     {heroProduct.name}
                     {showSubtitleInHeading && (
                       <>
@@ -128,7 +128,7 @@ export const HeroBanner: React.FC = () => {
 
                   {/* Olfactory Notes Strip — Only shown when product has notes */}
                   {hasNotes && (
-                    <div className="grid grid-cols-3 gap-3 pt-2 border-t border-white/10 max-w-lg">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 pt-2 border-t border-white/10 max-w-lg">
                       {heroProduct.notes?.topo && (
                         <div>
                           <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Nota de Topo</span>
@@ -136,13 +136,13 @@ export const HeroBanner: React.FC = () => {
                         </div>
                       )}
                       {heroProduct.notes?.coracao && (
-                        <div className={heroProduct.notes?.topo ? 'border-l border-white/10 pl-3' : ''}>
+                        <div className={heroProduct.notes?.topo ? 'border-t pt-2 sm:border-t-0 sm:pt-0 sm:border-l border-white/10 sm:pl-3' : ''}>
                           <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Coração</span>
                           <span className="text-xs font-semibold text-white">{heroProduct.notes.coracao}</span>
                         </div>
                       )}
                       {heroProduct.notes?.fundo && (
-                        <div className={(heroProduct.notes?.topo || heroProduct.notes?.coracao) ? 'border-l border-white/10 pl-3' : ''}>
+                        <div className={(heroProduct.notes?.topo || heroProduct.notes?.coracao) ? 'border-t pt-2 sm:border-t-0 sm:pt-0 sm:border-l border-white/10 sm:pl-3' : ''}>
                           <span className="block text-[9px] uppercase tracking-[0.18em] text-neutral-400">Fundo</span>
                           <span className="text-xs font-semibold text-white">{heroProduct.notes.fundo}</span>
                         </div>
@@ -151,8 +151,8 @@ export const HeroBanner: React.FC = () => {
                   )}
                 </>
               ) : (
-                <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white leading-[1.1]">
-                  Vasconcelos Cosméticos & Perfumaria
+                <h1 className="text-2xl sm:text-5xl font-bold tracking-tight text-white leading-[1.15]">
+                  Vasconcelos Utensílios e Presentes
                 </h1>
               )}
             </div>
@@ -206,7 +206,7 @@ export const HeroBanner: React.FC = () => {
           {/* Right Product Editorial Image */}
           <div
             onClick={handleOpenHeroProduct}
-            className="lg:col-span-5 relative min-h-[320px] sm:min-h-[420px] bg-[#1E1C1A] overflow-hidden cursor-pointer group"
+            className="order-first lg:order-last lg:col-span-5 relative min-h-[240px] sm:min-h-[340px] lg:min-h-[420px] bg-[#1E1C1A] overflow-hidden cursor-pointer group"
           >
             {heroProduct && (
               <>

@@ -60,11 +60,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             e.stopPropagation();
             toggleWishlist(product.id);
           }}
-          className={`absolute top-2.5 right-2.5 z-10 p-2 rounded-full transition-colors cursor-pointer ${
-            isFavorited
+          className={`absolute top-2.5 right-2.5 z-10 p-2 rounded-full transition-colors cursor-pointer ${isFavorited
               ? 'bg-[#8B1E3F] text-white'
               : 'bg-white/90 text-neutral-700 hover:text-[#8B1E3F]'
-          }`}
+            }`}
           aria-label="Adicionar à Lista de Desejos"
         >
           <Heart className={`w-4 h-4 ${isFavorited ? 'fill-white stroke-white' : ''}`} />
@@ -72,16 +71,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       </div>
 
       {/* Product Information */}
-      <div className="p-4 flex-1 flex flex-col justify-between">
+      <div className="p-2.5 sm:p-4 flex-1 flex flex-col justify-between">
         <div>
           {/* Category & Volume */}
-          <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500 mb-1">
-            <span>{product.category}</span>
-            <span>{product.volume}</span>
+          <div className="flex items-center justify-between gap-1 text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.08em] sm:tracking-[0.12em] text-neutral-500 mb-1">
+            <span className="truncate">{product.category}</span>
+            <span className="shrink-0">{product.volume}</span>
           </div>
 
           {/* Product Name */}
-          <h3 className="text-sm font-bold text-neutral-950 line-clamp-2 group-hover:text-[#8B1E3F] transition-colors leading-snug">
+          <h3 className="text-xs sm:text-sm font-bold text-neutral-950 line-clamp-2 group-hover:text-[#8B1E3F] transition-colors leading-snug">
             {product.name}
           </h3>
 
@@ -116,11 +115,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
           <button
             onClick={handleQuickAdd}
-            className={`mt-3 w-full py-2.5 px-3 rounded-lg text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-2 transition-colors cursor-pointer ${
-              addedFeedback
+            className={`mt-2.5 sm:mt-3 w-full py-2.5 px-2 sm:px-3 rounded-lg text-[11px] sm:text-xs font-bold tracking-wider uppercase flex items-center justify-center gap-1.5 sm:gap-2 transition-colors cursor-pointer ${addedFeedback
                 ? 'bg-emerald-700 text-white'
                 : 'bg-[#111111] hover:bg-[#8B1E3F] text-white'
-            }`}
+              }`}
           >
             {addedFeedback ? (
               <>
@@ -129,8 +127,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               </>
             ) : (
               <>
-                <ShoppingBag className="w-3.5 h-3.5" />
-                <span>Adicionar à Sacola</span>
+                <ShoppingBag className="w-3.5 h-3.5 shrink-0" />
+                <span className="sm:hidden">Adicionar</span>
+                <span className="hidden sm:inline">Adicionar à Sacola</span>
               </>
             )}
           </button>

@@ -59,14 +59,14 @@ export const Header: React.FC = () => {
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       {/* Main Header Row */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-18 sm:h-20 gap-4">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between min-h-16 sm:h-20 gap-2 sm:gap-4">
 
           {/* Mobile Hamburger + Brand Logo */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 -ml-2 text-neutral-800 hover:text-black lg:hidden cursor-pointer"
+              className="p-2 -ml-1.5 text-neutral-800 hover:text-black lg:hidden cursor-pointer shrink-0"
               aria-label="Abrir Menu"
             >
               {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -78,12 +78,12 @@ export const Header: React.FC = () => {
                 setSelectedCategory('todos');
                 window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
-              className="cursor-pointer group flex flex-col"
+              className="cursor-pointer group flex flex-col min-w-0"
             >
-              <span className="text-lg sm:text-2xl font-extrabold tracking-[0.22em] text-neutral-950 leading-none">
+              <span className="text-base sm:text-2xl font-extrabold tracking-[0.14em] sm:tracking-[0.22em] text-neutral-950 leading-none truncate">
                 VASCONCELOS
               </span>
-              <span className="text-[8px] sm:text-[9px] uppercase tracking-[0.28em] text-neutral-500 font-semibold mt-1">
+              <span className="text-[7px] sm:text-[9px] uppercase tracking-[0.12em] sm:tracking-[0.24em] text-neutral-500 font-semibold mt-1 truncate">
                 Utensílios e Presentes
               </span>
             </div>
@@ -114,7 +114,7 @@ export const Header: React.FC = () => {
           )}
 
           {/* Action Controls */}
-          <div className="flex items-center space-x-1.5 sm:space-x-3">
+          <div className="flex items-center space-x-0.5 sm:space-x-3 shrink-0">
 
             {/* Admin Back-to-Store or Discrete Admin Toggle */}
             {viewMode === 'admin' ? (
@@ -272,7 +272,7 @@ export const Header: React.FC = () => {
 
       {/* Mobile Navigation Drawer */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-white border-b border-neutral-200 px-4 pt-3 pb-6 space-y-2">
+        <div className="lg:hidden bg-white border-b border-neutral-200 px-4 pt-3 pb-6 space-y-2 max-h-[75dvh] overflow-y-auto shadow-lg">
           <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-400 px-2 pb-1">
             Departamentos
           </div>

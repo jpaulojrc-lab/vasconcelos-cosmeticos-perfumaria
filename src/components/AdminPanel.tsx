@@ -1810,7 +1810,7 @@ export const AdminPanel: React.FC = () => {
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
             <button
               type="button"
               disabled={isSyncingSupabase}
@@ -1878,60 +1878,60 @@ export const AdminPanel: React.FC = () => {
         </div>
 
         {/* Admin Navigation Tabs */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-6 text-xs font-bold uppercase tracking-wider overflow-x-auto">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 grid grid-cols-2 sm:flex sm:flex-wrap lg:flex-nowrap gap-1.5 sm:gap-x-6 py-2.5 sm:py-0 text-[11px] sm:text-xs font-bold uppercase tracking-wider">
           <button
             onClick={() => setActiveTab('relatorios')}
-            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'relatorios'
-              ? 'border-white text-white'
-              : 'border-transparent text-neutral-400 hover:text-white'
+            className={`px-2.5 py-2.5 sm:px-0 sm:py-3.5 rounded-lg sm:rounded-none sm:border-b-2 flex items-center gap-1.5 sm:gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'relatorios'
+              ? 'bg-white/15 sm:bg-transparent sm:border-white text-white'
+              : 'bg-white/5 sm:bg-transparent sm:border-transparent text-neutral-400 hover:text-white'
               }`}
           >
-            <DollarSign className="w-4 h-4" />
-            <span>Financeiro & Pedidos ({orders.length})</span>
+            <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">Pedidos ({orders.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('estoque')}
-            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'estoque'
-              ? 'border-white text-white'
-              : 'border-transparent text-neutral-400 hover:text-white'
+            className={`px-2.5 py-2.5 sm:px-0 sm:py-3.5 rounded-lg sm:rounded-none sm:border-b-2 flex items-center gap-1.5 sm:gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'estoque'
+              ? 'bg-white/15 sm:bg-transparent sm:border-white text-white'
+              : 'bg-white/5 sm:bg-transparent sm:border-transparent text-neutral-400 hover:text-white'
               }`}
           >
-            <Package className="w-4 h-4" />
-            <span>Estoque & Produtos ({products.length})</span>
+            <Package className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">Produtos ({products.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('cupons')}
-            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'cupons'
-              ? 'border-white text-white'
-              : 'border-transparent text-neutral-400 hover:text-white'
+            className={`px-2.5 py-2.5 sm:px-0 sm:py-3.5 rounded-lg sm:rounded-none sm:border-b-2 flex items-center gap-1.5 sm:gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'cupons'
+              ? 'bg-white/15 sm:bg-transparent sm:border-white text-white'
+              : 'bg-white/5 sm:bg-transparent sm:border-transparent text-neutral-400 hover:text-white'
               }`}
           >
-            <Tag className="w-4 h-4" />
-            <span>Cupons Promocionais</span>
+            <Tag className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">Cupons</span>
           </button>
 
           <button
             onClick={() => setActiveTab('cobranca')}
-            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'cobranca'
-              ? 'border-white text-white'
-              : 'border-transparent text-neutral-400 hover:text-white'
+            className={`px-2.5 py-2.5 sm:px-0 sm:py-3.5 rounded-lg sm:rounded-none sm:border-b-2 flex items-center gap-1.5 sm:gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'cobranca'
+              ? 'bg-white/15 sm:bg-transparent sm:border-white text-white'
+              : 'bg-white/5 sm:bg-transparent sm:border-transparent text-neutral-400 hover:text-white'
               }`}
           >
-            <MessageCircle className="w-4 h-4" />
-            <span>Cobrança (WhatsApp & E-mail)</span>
+            <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">Cobrança</span>
           </button>
 
           <button
             onClick={() => setActiveTab('clientes')}
-            className={`py-3.5 border-b-2 flex items-center gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'clientes'
-              ? 'border-white text-white'
-              : 'border-transparent text-neutral-400 hover:text-white'
+            className={`col-span-2 sm:col-span-1 px-2.5 py-2.5 sm:px-0 sm:py-3.5 rounded-lg sm:rounded-none sm:border-b-2 flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 transition whitespace-nowrap cursor-pointer ${activeTab === 'clientes'
+              ? 'bg-white/15 sm:bg-transparent sm:border-white text-white'
+              : 'bg-white/5 sm:bg-transparent sm:border-transparent text-neutral-400 hover:text-white'
               }`}
           >
-            <Users className="w-4 h-4" />
-            <span>Clientes ({registeredUsers.length})</span>
+            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span className="truncate">Clientes ({registeredUsers.length})</span>
           </button>
         </div>
       </div>
@@ -4417,7 +4417,7 @@ export const AdminPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="font-bold text-neutral-700">Preço Promocional (R$) *</label>
                   <input
